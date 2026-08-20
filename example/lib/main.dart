@@ -28,6 +28,7 @@ class _ExampleAppState extends State<ExampleApp> {
 
   bool _dark = false;
   bool _onShift = false;
+  bool _curvedArrows = false;
 
   @override
   void dispose() {
@@ -51,21 +52,31 @@ class _ExampleAppState extends State<ExampleApp> {
         home: HomePage(
           onToggleTheme: () => setState(() => _dark = !_dark),
           onToggleShift: () => setState(() => _onShift = !_onShift),
+          onToggleArrow: () => setState(() => _curvedArrows = !_curvedArrows),
           onShift: _onShift,
           isDark: _dark,
+          curvedArrows: _curvedArrows,
         ),
       ),
     );
   }
 
   /// The whole package is themed from one [ThemeExtension].
+  ///
+  /// Flipping [_curvedArrows] here restyles the caret on every tooltip, hint
+  /// and beacon in the app at once — that is the point of theming all three
+  /// features from one place.
   ThemeData _theme(Brightness brightness) => ThemeData(
         brightness: brightness,
         colorSchemeSeed: const Color(0xFF3F51B5),
-        extensions: const <ThemeExtension<dynamic>>[
+        extensions: <ThemeExtension<dynamic>>[
           HintThemeData(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: const BorderRadius.all(Radius.circular(10)),
             maxWidth: 300,
+            arrowShape:
+                _curvedArrows ? HintArrowShape.curved : HintArrowShape.triangle,
+            // A curved caret needs some size before the curve reads at all.
+            arrowSize: _curvedArrows ? const Size(24, 13) : null,
           ),
         ],
       );
@@ -75,15 +86,19 @@ class HomePage extends StatefulWidget {
   const HomePage({
     required this.onToggleTheme,
     required this.onToggleShift,
+    required this.onToggleArrow,
     required this.onShift,
     required this.isDark,
+    required this.curvedArrows,
     super.key,
   });
 
   final VoidCallback onToggleTheme;
   final VoidCallback onToggleShift;
+  final VoidCallback onToggleArrow;
   final bool onShift;
   final bool isDark;
+  final bool curvedArrows;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -116,6 +131,23 @@ class _HomePageState extends State<HomePage> {
             child: IconButton(
               onPressed: widget.onToggleTheme,
               icon: Icon(widget.isDark ? Icons.light_mode : Icons.dark_mode),
+            ),
+          ),
+          // Restyles the caret on every bubble in the app at once.
+          Hint(
+            message: widget.curvedArrows
+                ? 'Switch to a straight caret'
+                : 'Switch to a curved caret — look at this bubble',
+            triggers: const <HintTrigger>{
+              HintTrigger.hover,
+              HintTrigger.longPress,
+            },
+            waitDuration: const Duration(milliseconds: 300),
+            child: IconButton(
+              onPressed: widget.onToggleArrow,
+              icon: Icon(
+                widget.curvedArrows ? Icons.bubble_chart : Icons.change_history,
+              ),
             ),
           ),
           // Step 1 of the tour.

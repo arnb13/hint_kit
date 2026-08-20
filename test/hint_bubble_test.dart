@@ -258,6 +258,156 @@ void main() {
     });
   });
 
+  group('curved arrow', () {
+    const Rect rect = Rect.fromLTWH(0, 0, 100, 50);
+    const BorderRadius radius = BorderRadius.all(Radius.circular(8));
+    const Size arrow = Size(20, 12);
+
+    Path curved(HintSide side, {double fraction = 0.5}) => buildBubblePath(
+          rect: rect,
+          borderRadius: radius,
+          side: side,
+          arrowFraction: fraction,
+          arrowSize: arrow,
+          arrowShape: HintArrowShape.curved,
+        );
+
+    Path triangle(HintSide side, {double fraction = 0.5}) => buildBubblePath(
+          rect: rect,
+          borderRadius: radius,
+          side: side,
+          arrowFraction: fraction,
+          arrowSize: arrow,
+        );
+
+    test('occupies exactly the same box as the triangle', () {
+      // Switching shapes must never move the bubble, so the two silhouettes
+      // have to agree on their bounds to the pixel.
+      for (final HintSide side in HintSide.values) {
+        final Rect a = curved(side).getBounds();
+        final Rect b = triangle(side).getBounds();
+        expect(a.left, closeTo(b.left, 0.01), reason: '$side left');
+        expect(a.top, closeTo(b.top, 0.01), reason: '$side top');
+        expect(a.right, closeTo(b.right, 0.01), reason: '$side right');
+        expect(a.bottom, closeTo(b.bottom, 0.01), reason: '$side bottom');
+      }
+    });
+
+    test('grows from the correct edge for every side', () {
+      expect(
+        curved(HintSide.top).getBounds().bottom,
+        closeTo(rect.bottom + arrow.height, 0.01),
+      );
+      expect(
+        curved(HintSide.bottom).getBounds().top,
+        closeTo(rect.top - arrow.height, 0.01),
+      );
+      expect(
+        curved(HintSide.left).getBounds().right,
+        closeTo(rect.right + arrow.height, 0.01),
+      );
+      expect(
+        curved(HintSide.right).getBounds().left,
+        closeTo(rect.left - arrow.height, 0.01),
+      );
+    });
+
+    test('is a single closed contour', () {
+      final List<PathMetric> metrics =
+          curved(HintSide.top).computeMetrics().toList();
+      expect(metrics.length, 1);
+      expect(metrics.single.isClosed, isTrue);
+    });
+
+    test('reaches the tip and stops there', () {
+      final Path p = curved(HintSide.top);
+      expect(p.contains(Offset(50, rect.bottom + arrow.height - 1)), isTrue);
+      expect(p.contains(Offset(50, rect.bottom + arrow.height + 1)), isFalse);
+    });
+
+    test('follows arrowFraction', () {
+      final Path left = curved(HintSide.top, fraction: 0.2);
+      final Path right = curved(HintSide.top, fraction: 0.8);
+      expect(left.contains(Offset(20, rect.bottom + 4)), isTrue);
+      expect(left.contains(Offset(80, rect.bottom + 4)), isFalse);
+      expect(right.contains(Offset(80, rect.bottom + 4)), isTrue);
+      expect(right.contains(Offset(20, rect.bottom + 4)), isFalse);
+    });
+
+    test('tapers inside the straight flank', () {
+      // The flanks leave the body parallel to the edge and then fall away
+      // towards the tip, so the caret is concave: mid-way down it is slimmer
+      // than a straight taper between the same base and tip. That concavity is
+      // the difference between the two shapes.
+      final Path c = curved(HintSide.top);
+      final Path t = triangle(HintSide.top);
+      final Offset probe = Offset(50 + arrow.width * 0.3, rect.bottom + 3);
+      expect(t.contains(probe), isTrue, reason: 'inside the straight flank');
+      expect(c.contains(probe), isFalse, reason: 'outside the curved flank');
+    });
+
+    test('still fills the base corners', () {
+      // Slimmer in the middle must not mean detached at the base: the caret
+      // has to meet the body across its full width or the union would leave a
+      // notch beside it.
+      final Path c = curved(HintSide.top);
+      for (final double dx in <double>[-9, -5, 0, 5, 9]) {
+        expect(
+          c.contains(Offset(50 + dx, rect.bottom - 0.25)),
+          isTrue,
+          reason: 'gap at the base at dx=$dx',
+        );
+      }
+    });
+
+    test('leaves the body edge without a corner', () {
+      // Sampled just inside the base on both flanks, the curve is symmetric
+      // about the caret centre — a crease would break that.
+      final Path p = curved(HintSide.top);
+      for (final double dx in <double>[2, 4, 6, 8]) {
+        expect(
+          p.contains(Offset(50 - dx, rect.bottom + 1)),
+          p.contains(Offset(50 + dx, rect.bottom + 1)),
+          reason: 'asymmetric at dx=$dx',
+        );
+      }
+    });
+
+    test('a zero-sized arrow still degrades to the plain body', () {
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: Size.zero,
+        arrowShape: HintArrowShape.curved,
+      );
+      expect(p.getBounds(), rect);
+    });
+
+    test('defaults to a triangle when no shape is given', () {
+      final Path implicit = triangle(HintSide.top);
+      final Path explicit = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+        arrowShape: HintArrowShape.triangle,
+      );
+      // Same silhouette: a probe grid agrees everywhere.
+      for (double x = 40; x <= 60; x += 2) {
+        for (double y = 48; y <= 64; y += 2) {
+          expect(
+            implicit.contains(Offset(x, y)),
+            explicit.contains(Offset(x, y)),
+            reason: 'disagreement at ($x, $y)',
+          );
+        }
+      }
+    });
+  });
+
   group('goldens', () {
     for (final HintSide side in HintSide.values) {
       testWidgets('bubble on ${side.name}', (WidgetTester tester) async {
@@ -315,6 +465,59 @@ void main() {
       await expectLater(
         find.byType(HintBubbleDecoration),
         matchesGoldenFile('goldens/bubble_bordered.png'),
+      );
+    });
+
+    for (final HintSide side in HintSide.values) {
+      testWidgets('curved arrow on ${side.name}', (WidgetTester tester) async {
+        await tester.pumpWidget(
+          harness(
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: bubble(
+                side: side,
+                title: 'Check in',
+                theme: const HintThemeData(
+                  arrowShape: HintArrowShape.curved,
+                  arrowSize: Size(24, 14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
+                ),
+              ),
+            ),
+          ),
+        );
+        await expectLater(
+          find.byType(HintBubbleDecoration),
+          matchesGoldenFile('goldens/bubble_curved_${side.name}.png'),
+        );
+      });
+    }
+
+    testWidgets('curved arrow with a border', (WidgetTester tester) async {
+      // The border is where the join shows: a crease between caret and body
+      // would be plainly visible along the stroke.
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: bubble(
+              side: HintSide.top,
+              theme: const HintThemeData(
+                arrowShape: HintArrowShape.curved,
+                arrowSize: Size(26, 15),
+                backgroundColor: Color(0xFFFFFFFF),
+                foregroundColor: Color(0xFF1A1A1A),
+                borderColor: Color(0xFF6750A4),
+                borderWidth: 2,
+                borderRadius: BorderRadius.all(Radius.circular(18)),
+              ),
+            ),
+          ),
+        ),
+      );
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/bubble_curved_bordered.png'),
       );
     });
 

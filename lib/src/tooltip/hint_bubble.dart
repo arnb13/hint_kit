@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../core/hint_arrow.dart';
 import '../core/hint_side.dart';
 import '../theme/hint_theme.dart';
 
@@ -22,12 +23,16 @@ import '../theme/hint_theme.dart';
 /// The caller is responsible for having clamped [arrowFraction] far enough
 /// from the ends of the edge that the caret does not collide with a corner;
 /// `resolvePlacement` does this using `HintThemeData.arrowInset`.
+///
+/// [arrowShape] selects the caret silhouette. Both shapes occupy exactly the
+/// same [arrowSize] box, so switching between them never moves the bubble.
 Path buildBubblePath({
   required Rect rect,
   required BorderRadius borderRadius,
   required HintSide side,
   required double arrowFraction,
   required Size arrowSize,
+  HintArrowShape arrowShape = HintArrowShape.triangle,
 }) {
   assert(rect.isFinite, 'buildBubblePath: rect must be finite, got $rect.');
   assert(
@@ -45,44 +50,125 @@ Path buildBubblePath({
     return body;
   }
 
-  // The arrow is a triangle whose base sits *on* the body edge and whose apex
-  // points away from the bubble, towards the target. Its base is widened by a
-  // hair so the union never leaves a hairline crack along the shared edge.
+  // The arrow's base sits *on* the body edge and its apex points away from the
+  // bubble, towards the target. The base is sunk into the body by a hair so
+  // the union never leaves a hairline crack along the shared edge.
   const double overlap = 0.5;
   final double half = arrowSize.width / 2;
   final double depth = arrowSize.height;
-  final Path arrow = Path();
 
+  // Where the caret meets the body, and which way is "along the edge".
+  final Offset baseCentre;
+  final Offset along;
+  final Offset tip;
   switch (side) {
     case HintSide.top:
-      // Bubble above the target: arrow hangs off the bottom edge.
+      // Bubble above the target: the caret hangs off the bottom edge.
       final double x = rect.left + rect.width * arrowFraction;
-      arrow
-        ..moveTo(x - half, rect.bottom - overlap)
-        ..lineTo(x, rect.bottom + depth)
-        ..lineTo(x + half, rect.bottom - overlap);
+      baseCentre = Offset(x, rect.bottom - overlap);
+      along = const Offset(1, 0);
+      tip = Offset(x, rect.bottom + depth);
     case HintSide.bottom:
       final double x = rect.left + rect.width * arrowFraction;
-      arrow
-        ..moveTo(x - half, rect.top + overlap)
-        ..lineTo(x, rect.top - depth)
-        ..lineTo(x + half, rect.top + overlap);
+      baseCentre = Offset(x, rect.top + overlap);
+      along = const Offset(1, 0);
+      tip = Offset(x, rect.top - depth);
     case HintSide.left:
       final double y = rect.top + rect.height * arrowFraction;
-      arrow
-        ..moveTo(rect.right - overlap, y - half)
-        ..lineTo(rect.right + depth, y)
-        ..lineTo(rect.right - overlap, y + half);
+      baseCentre = Offset(rect.right - overlap, y);
+      along = const Offset(0, 1);
+      tip = Offset(rect.right + depth, y);
     case HintSide.right:
       final double y = rect.top + rect.height * arrowFraction;
-      arrow
-        ..moveTo(rect.left + overlap, y - half)
-        ..lineTo(rect.left - depth, y)
-        ..lineTo(rect.left + overlap, y + half);
+      baseCentre = Offset(rect.left + overlap, y);
+      along = const Offset(0, 1);
+      tip = Offset(rect.left - depth, y);
   }
-  arrow.close();
+
+  final Path arrow = switch (arrowShape) {
+    HintArrowShape.triangle => _triangleArrow(
+        baseCentre: baseCentre,
+        along: along,
+        tip: tip,
+        half: half,
+      ),
+    HintArrowShape.curved => _curvedArrow(
+        baseCentre: baseCentre,
+        along: along,
+        tip: tip,
+        half: half,
+      ),
+  };
 
   return Path.combine(PathOperation.union, body, arrow);
+}
+
+/// A straight-sided caret: two lines from the base corners to the tip.
+Path _triangleArrow({
+  required Offset baseCentre,
+  required Offset along,
+  required Offset tip,
+  required double half,
+}) {
+  final Offset a = baseCentre - along * half;
+  final Offset b = baseCentre + along * half;
+  return Path()
+    ..moveTo(a.dx, a.dy)
+    ..lineTo(tip.dx, tip.dy)
+    ..lineTo(b.dx, b.dy)
+    ..close();
+}
+
+/// A tapered caret whose flanks curve out of the body edge.
+///
+/// Each flank is a cubic that leaves the base *parallel to the edge* — its
+/// first control point lies on the edge itself — and then falls away towards
+/// the tip. There is therefore no corner where the caret meets the body: the
+/// two flow into one another, the way a speech balloon's tail does.
+///
+/// The consequence is that the flanks are concave, so between the base and the
+/// tip the caret is slimmer than a straight taper would be. It still spans the
+/// full base width, so the union never leaves a notch beside it.
+Path _curvedArrow({
+  required Offset baseCentre,
+  required Offset along,
+  required Offset tip,
+  required double half,
+}) {
+  // How far the tangent runs along the edge before the flank turns: larger
+  // values give a wider, softer sweep.
+  const double sweep = 0.55;
+  // How close to the tip the flank is still leaning sideways: smaller values
+  // give a sharper point.
+  const double taper = 0.08;
+  // Where along the caret's depth the flank has finished turning.
+  const double shoulder = 0.62;
+
+  final Offset a = baseCentre - along * half;
+  final Offset b = baseCentre + along * half;
+  final Offset depth = tip - baseCentre;
+  final Offset shoulderPoint = baseCentre + depth * shoulder;
+
+  return Path()
+    ..moveTo(a.dx, a.dy)
+    ..cubicTo(
+      // Tangent along the edge, so the flank leaves the body smoothly.
+      (a + along * (half * sweep)).dx,
+      (a + along * (half * sweep)).dy,
+      (shoulderPoint - along * (half * taper)).dx,
+      (shoulderPoint - along * (half * taper)).dy,
+      tip.dx,
+      tip.dy,
+    )
+    ..cubicTo(
+      (shoulderPoint + along * (half * taper)).dx,
+      (shoulderPoint + along * (half * taper)).dy,
+      (b - along * (half * sweep)).dx,
+      (b - along * (half * sweep)).dy,
+      b.dx,
+      b.dy,
+    )
+    ..close();
 }
 
 /// Shrinks [radius] until it fits inside [size].
@@ -146,6 +232,7 @@ class HintBubbleDecoration extends StatelessWidget {
         arrowFraction: arrowFraction,
         borderRadius: theme.borderRadius,
         arrowSize: theme.arrowSize,
+        arrowShape: theme.arrowShape,
         backgroundColor: theme.backgroundColor,
         borderColor: theme.borderColor,
         borderWidth: theme.borderWidth,
@@ -165,6 +252,7 @@ class _BubblePainter extends CustomPainter {
     required this.arrowFraction,
     required this.borderRadius,
     required this.arrowSize,
+    required this.arrowShape,
     required this.backgroundColor,
     required this.borderColor,
     required this.borderWidth,
@@ -177,6 +265,7 @@ class _BubblePainter extends CustomPainter {
   final double arrowFraction;
   final BorderRadius borderRadius;
   final Size arrowSize;
+  final HintArrowShape arrowShape;
   final Color backgroundColor;
   final Color borderColor;
   final double borderWidth;
@@ -195,6 +284,7 @@ class _BubblePainter extends CustomPainter {
       side: side,
       arrowFraction: arrowFraction,
       arrowSize: arrowSize,
+      arrowShape: arrowShape,
     );
 
     if (elevation > 0) {
@@ -219,6 +309,7 @@ class _BubblePainter extends CustomPainter {
       old.arrowFraction != arrowFraction ||
       old.borderRadius != borderRadius ||
       old.arrowSize != arrowSize ||
+      old.arrowShape != arrowShape ||
       old.backgroundColor != backgroundColor ||
       old.borderColor != borderColor ||
       old.borderWidth != borderWidth ||

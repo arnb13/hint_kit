@@ -18,6 +18,7 @@
 /// @docImport 'src/tour/tour_scope.dart';
 library;
 
+export 'src/core/hint_arrow.dart' show HintArrowShape;
 export 'src/core/hint_side.dart' show HintDirection, HintSide;
 export 'src/core/hint_trigger.dart' show HintTrigger;
 export 'src/core/measure_size.dart' show MeasureSize, SizeChangedCallback;

@@ -67,6 +67,7 @@ void main() {
         shadowColor: const Color(0xFF000004),
         padding: const EdgeInsets.all(4),
         arrowSize: const Size(5, 6),
+        arrowShape: HintArrowShape.curved,
         arrowInset: 7,
         gap: 8,
         screenMargin: const EdgeInsets.all(9),
@@ -91,6 +92,7 @@ void main() {
       expect(full.shadowColor, const Color(0xFF000004));
       expect(full.padding, const EdgeInsets.all(4));
       expect(full.arrowSize, const Size(5, 6));
+      expect(full.arrowShape, HintArrowShape.curved);
       expect(full.arrowInset, 7);
       expect(full.gap, 8);
       expect(full.screenMargin, const EdgeInsets.all(9));
@@ -163,6 +165,17 @@ void main() {
         a.lerp(b, 0.51).transitionDuration,
         const Duration(milliseconds: 300),
       );
+    });
+
+    test('the arrow shape snaps rather than interpolating', () {
+      const HintThemeData straight = HintThemeData(
+        arrowShape: HintArrowShape.triangle,
+      );
+      const HintThemeData curved = HintThemeData(
+        arrowShape: HintArrowShape.curved,
+      );
+      expect(straight.lerp(curved, 0.49).arrowShape, HintArrowShape.triangle);
+      expect(straight.lerp(curved, 0.51).arrowShape, HintArrowShape.curved);
     });
 
     test('lerping against null returns this', () {
@@ -349,6 +362,61 @@ void main() {
         onResolved: (ResolvedHintTheme r) => resolved = r,
       );
       expect(resolved.arrowInset, 20 + 8);
+    });
+
+    testWidgets('the arrow is a triangle unless asked otherwise',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.arrowShape, HintArrowShape.triangle);
+    });
+
+    testWidgets('a curved arrow can be set app-wide', (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        extension: const HintThemeData(arrowShape: HintArrowShape.curved),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.arrowShape, HintArrowShape.curved);
+    });
+
+    testWidgets('a per-instance arrow shape beats the app theme',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        extension: const HintThemeData(arrowShape: HintArrowShape.curved),
+        overrides: const HintThemeData(arrowShape: HintArrowShape.triangle),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.arrowShape, HintArrowShape.triangle);
+    });
+
+    testWidgets('the arrow shape does not change the gap',
+        (WidgetTester t) async {
+      // Both shapes fill the same box, so the bubble must not move when the
+      // shape changes.
+      late ResolvedHintTheme straight;
+      late ResolvedHintTheme curved;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(arrowSize: Size(20, 10)),
+        onResolved: (ResolvedHintTheme r) => straight = r,
+      );
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(
+          arrowSize: Size(20, 10),
+          arrowShape: HintArrowShape.curved,
+        ),
+        onResolved: (ResolvedHintTheme r) => curved = r,
+      );
+      expect(curved.gap, straight.gap);
+      expect(curved.arrowInset, straight.arrowInset);
     });
 
     testWidgets('an explicit arrowInset wins', (WidgetTester t) async {

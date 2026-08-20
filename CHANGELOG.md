@@ -49,5 +49,9 @@ placement resolver and one theme. No runtime dependencies.
 - `HintThemeData`, a `ThemeExtension` that themes all three features together,
   with per-field resolution and `ColorScheme`-derived defaults that look right
   in light and dark without configuration.
+- Two caret silhouettes via `HintArrowShape`: the default `triangle`, and
+  `curved`, a speech-balloon tail whose flanks leave the bubble edge parallel
+  to it so there is no corner where the caret meets the body. Both fill the
+  same `arrowSize` box, so switching never moves the bubble.
 - `resolvePlacement`, a pure placement function, exported for anyone building
   their own overlay.

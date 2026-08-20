@@ -317,7 +317,20 @@ Resolution is **per field**, in this order:
 
 So overriding one colour on one hint keeps every other value from the app theme. With no configuration at all, bubbles read correctly in both light and dark mode — the defaults come from `colorScheme.inverseSurface`.
 
-Covered: colours, border, radius, elevation and shadow, padding, arrow size and inset, gap, screen margin, max width, text styles, transition duration and curve, scrim colour and blur, spotlight radius and padding.
+Covered: colours, border, radius, elevation and shadow, padding, arrow size, shape and inset, gap, screen margin, max width, text styles, transition duration and curve, scrim colour and blur, spotlight radius and padding.
+
+### The arrow
+
+```dart
+HintThemeData(
+  arrowShape: HintArrowShape.curved,   // or .triangle, the default
+  arrowSize: const Size(24, 14),       // width along the edge, depth away from it
+)
+```
+
+`triangle` is the conventional straight-sided caret. `curved` gives a speech-balloon tail: each flank leaves the bubble edge *parallel to it* and falls away to the tip, so there is no corner where the caret meets the body — which is most visible on a bubble with a border. The flanks are concave, so a curved caret reads slimmer than a triangle of the same size; it suits a larger `arrowSize` and a generous corner radius.
+
+Both shapes fill exactly the same `arrowSize` box, so switching between them changes the outline and nothing else — the bubble does not move.
 
 ## Accessibility
 

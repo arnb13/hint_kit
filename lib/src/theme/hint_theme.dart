@@ -3,6 +3,8 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../core/hint_arrow.dart';
+
 /// Visual configuration shared by tooltips, hints and tour step cards.
 ///
 /// [HintThemeData] is a [ThemeExtension], so the usual place to configure it
@@ -44,6 +46,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     this.shadowColor,
     this.padding,
     this.arrowSize,
+    this.arrowShape,
     this.arrowInset,
     this.gap,
     this.screenMargin,
@@ -92,6 +95,12 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
 
   /// Size of the arrow: width along the bubble edge, height away from it.
   final Size? arrowSize;
+
+  /// The caret's silhouette. Defaults to [HintArrowShape.triangle].
+  ///
+  /// Both shapes fill the same [arrowSize] box, so switching between them
+  /// changes only the outline — never the bubble's position.
+  final HintArrowShape? arrowShape;
 
   /// Minimum distance between the arrow's centre and either end of the edge it
   /// sits on.
@@ -181,6 +190,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       shadowColor: other.shadowColor,
       padding: other.padding,
       arrowSize: other.arrowSize,
+      arrowShape: other.arrowShape,
       arrowInset: other.arrowInset,
       gap: other.gap,
       screenMargin: other.screenMargin,
@@ -208,6 +218,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     Color? shadowColor,
     EdgeInsets? padding,
     Size? arrowSize,
+    HintArrowShape? arrowShape,
     double? arrowInset,
     double? gap,
     EdgeInsets? screenMargin,
@@ -232,6 +243,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       shadowColor: shadowColor ?? this.shadowColor,
       padding: padding ?? this.padding,
       arrowSize: arrowSize ?? this.arrowSize,
+      arrowShape: arrowShape ?? this.arrowShape,
       arrowInset: arrowInset ?? this.arrowInset,
       gap: gap ?? this.gap,
       screenMargin: screenMargin ?? this.screenMargin,
@@ -265,6 +277,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       shadowColor: Color.lerp(shadowColor, other.shadowColor, t),
       padding: EdgeInsets.lerp(padding, other.padding, t),
       arrowSize: Size.lerp(arrowSize, other.arrowSize, t),
+      arrowShape: t < 0.5 ? arrowShape : other.arrowShape,
       arrowInset: _lerpDouble(arrowInset, other.arrowInset, t),
       gap: _lerpDouble(gap, other.gap, t),
       screenMargin: EdgeInsets.lerp(screenMargin, other.screenMargin, t),
@@ -308,6 +321,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         other.shadowColor == shadowColor &&
         other.padding == padding &&
         other.arrowSize == arrowSize &&
+        other.arrowShape == arrowShape &&
         other.arrowInset == arrowInset &&
         other.gap == gap &&
         other.screenMargin == screenMargin &&
@@ -334,6 +348,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         shadowColor,
         padding,
         arrowSize,
+        arrowShape,
         arrowInset,
         gap,
         screenMargin,
@@ -371,6 +386,13 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       )
       ..add(
         DiagnosticsProperty<Size>('arrowSize', arrowSize, defaultValue: none),
+      )
+      ..add(
+        EnumProperty<HintArrowShape>(
+          'arrowShape',
+          arrowShape,
+          defaultValue: none,
+        ),
       )
       ..add(DoubleProperty('gap', gap))
       ..add(DoubleProperty('maxWidth', maxWidth))
@@ -438,6 +460,9 @@ class ResolvedHintTheme {
 
   /// See [HintThemeData.arrowSize].
   Size get arrowSize => _data.arrowSize ?? const Size(14, 7);
+
+  /// See [HintThemeData.arrowShape].
+  HintArrowShape get arrowShape => _data.arrowShape ?? HintArrowShape.triangle;
 
   /// See [HintThemeData.arrowInset].
   ///
