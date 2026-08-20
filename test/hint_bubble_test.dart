@@ -1,0 +1,337 @@
+import 'dart:ui' show PathMetric;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hint_kit/hint_kit.dart';
+
+/// Wraps [child] in the minimum needed to paint a bubble deterministically.
+Widget harness(Widget child, {Brightness brightness = Brightness.light}) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(brightness: brightness, useMaterial3: true),
+    home: Scaffold(
+      backgroundColor: brightness == Brightness.light
+          ? const Color(0xFFF5F5F5)
+          : const Color(0xFF101010),
+      body: Center(child: child),
+    ),
+  );
+}
+
+/// Builds a bubble with resolved theming, ready to pump.
+Widget bubble({
+  required HintSide side,
+  double arrowFraction = 0.5,
+  HintThemeData? theme,
+  String message = 'Check in here',
+  String? title,
+}) {
+  return Builder(
+    builder: (BuildContext context) {
+      final ResolvedHintTheme resolved = HintThemeData.resolve(context, theme);
+      return SizedBox(
+        width: 200,
+        child: HintBubbleDecoration(
+          side: side,
+          arrowFraction: arrowFraction,
+          theme: resolved,
+          child: HintBubbleContent(
+            theme: resolved,
+            title: title,
+            message: message,
+          ),
+        ),
+      );
+    },
+  );
+}
+
+void main() {
+  group('buildBubblePath', () {
+    const Rect rect = Rect.fromLTWH(0, 0, 100, 50);
+    const BorderRadius radius = BorderRadius.all(Radius.circular(8));
+    const Size arrow = Size(14, 7);
+
+    test('extends past the body on the anchored edge', () {
+      // Bubble above the target: the caret hangs below the body.
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+      );
+      expect(p.getBounds().bottom, closeTo(rect.bottom + arrow.height, 0.01));
+      expect(p.getBounds().top, closeTo(rect.top, 0.01));
+    });
+
+    test('grows from the correct edge for every side', () {
+      Rect boundsFor(HintSide side) => buildBubblePath(
+            rect: rect,
+            borderRadius: radius,
+            side: side,
+            arrowFraction: 0.5,
+            arrowSize: arrow,
+          ).getBounds();
+
+      expect(boundsFor(HintSide.top).bottom, greaterThan(rect.bottom));
+      expect(boundsFor(HintSide.bottom).top, lessThan(rect.top));
+      expect(boundsFor(HintSide.left).right, greaterThan(rect.right));
+      expect(boundsFor(HintSide.right).left, lessThan(rect.left));
+    });
+
+    test('is a single closed contour, not two shapes', () {
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.bottom,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+      );
+      final List<PathMetric> metrics = p.computeMetrics().toList();
+      expect(
+        metrics.length,
+        1,
+        reason: 'the union must fuse the body and arrow into one contour',
+      );
+      expect(metrics.single.isClosed, isTrue);
+    });
+
+    test('the arrow tip is inside the path', () {
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+      );
+      // A point just inside the tip is filled; one past it is not.
+      expect(p.contains(Offset(50, rect.bottom + arrow.height - 1)), isTrue);
+      expect(p.contains(Offset(50, rect.bottom + arrow.height + 1)), isFalse);
+    });
+
+    test('the arrow follows arrowFraction', () {
+      final Path left = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.2,
+        arrowSize: arrow,
+      );
+      final Path right = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.8,
+        arrowSize: arrow,
+      );
+      expect(left.contains(Offset(20, rect.bottom + 5)), isTrue);
+      expect(left.contains(Offset(80, rect.bottom + 5)), isFalse);
+      expect(right.contains(Offset(80, rect.bottom + 5)), isTrue);
+      expect(right.contains(Offset(20, rect.bottom + 5)), isFalse);
+    });
+
+    test('a zero-sized arrow leaves the body untouched', () {
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: Size.zero,
+      );
+      expect(p.getBounds(), rect);
+    });
+
+    test('an oversized radius does not blow up the geometry', () {
+      final Path p = buildBubblePath(
+        rect: rect,
+        borderRadius: BorderRadius.circular(999),
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+      );
+      // Radius clamps to half the short side, so the body is a stadium.
+      expect(p.getBounds().width, closeTo(rect.width, 0.01));
+      expect(p.contains(const Offset(50, 25)), isTrue);
+    });
+
+    test('an empty rect degrades to an empty body', () {
+      final Path p = buildBubblePath(
+        rect: Rect.zero,
+        borderRadius: radius,
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: arrow,
+      );
+      expect(p.getBounds().isEmpty, isTrue);
+    });
+
+    test('asserts on an out-of-range arrow fraction', () {
+      expect(
+        () => buildBubblePath(
+          rect: rect,
+          borderRadius: radius,
+          side: HintSide.top,
+          arrowFraction: 1.4,
+          arrowSize: arrow,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('asserts on a non-finite rect', () {
+      expect(
+        () => buildBubblePath(
+          rect: const Rect.fromLTWH(0, 0, double.nan, 10),
+          borderRadius: radius,
+          side: HintSide.top,
+          arrowFraction: 0.5,
+          arrowSize: arrow,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+  });
+
+  group('HintBubbleContent', () {
+    testWidgets('renders a message alone', (WidgetTester tester) async {
+      await tester.pumpWidget(harness(bubble(side: HintSide.top)));
+      expect(find.text('Check in here'), findsOneWidget);
+    });
+
+    testWidgets('renders a title above the message',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(bubble(side: HintSide.top, title: 'Shift required')),
+      );
+      final Offset titleY = tester.getTopLeft(find.text('Shift required'));
+      final Offset messageY = tester.getTopLeft(find.text('Check in here'));
+      expect(titleY.dy, lessThan(messageY.dy));
+    });
+
+    testWidgets('wraps rather than clipping at maxWidth',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          bubble(
+            side: HintSide.top,
+            message: 'A rather long hint message that has to wrap onto '
+                'several lines to fit inside the bubble.',
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final Size size = tester.getSize(find.byType(HintBubbleDecoration));
+      expect(size.width, 200);
+      expect(size.height, greaterThan(40));
+    });
+
+    testWidgets('grows with the text scaler', (WidgetTester tester) async {
+      Future<double> heightAt(double scale) async {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: harness(bubble(side: HintSide.top)),
+          ),
+        );
+        return tester.getSize(find.byType(HintBubbleDecoration)).height;
+      }
+
+      final double small = await heightAt(1);
+      final double large = await heightAt(2);
+      expect(large, greaterThan(small));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('asserts when given neither title nor message',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          Builder(
+            builder: (BuildContext context) => HintBubbleContent(
+              theme: HintThemeData.resolve(context),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isA<AssertionError>());
+    });
+  });
+
+  group('goldens', () {
+    for (final HintSide side in HintSide.values) {
+      testWidgets('bubble on ${side.name}', (WidgetTester tester) async {
+        await tester.pumpWidget(
+          harness(
+            Padding(
+              // Room for the arrow to overhang in any direction.
+              padding: const EdgeInsets.all(16),
+              child: bubble(side: side, title: 'Check in'),
+            ),
+          ),
+        );
+        await expectLater(
+          find.byType(HintBubbleDecoration),
+          matchesGoldenFile('goldens/bubble_${side.name}.png'),
+        );
+      });
+    }
+
+    testWidgets('bubble with an off-centre arrow', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: bubble(side: HintSide.top, arrowFraction: 0.12),
+          ),
+        ),
+      );
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/bubble_arrow_offset.png'),
+      );
+    });
+
+    testWidgets('bubble with a border and a large radius',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: bubble(
+              side: HintSide.bottom,
+              theme: const HintThemeData(
+                backgroundColor: Color(0xFFFFFFFF),
+                foregroundColor: Color(0xFF1A1A1A),
+                borderColor: Color(0xFF6750A4),
+                borderWidth: 2,
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                arrowSize: Size(18, 9),
+              ),
+            ),
+          ),
+        ),
+      );
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/bubble_bordered.png'),
+      );
+    });
+
+    testWidgets('bubble in dark mode', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: bubble(side: HintSide.bottom, title: 'Check in'),
+          ),
+          brightness: Brightness.dark,
+        ),
+      );
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/bubble_dark.png'),
+      );
+    });
+  });
+}

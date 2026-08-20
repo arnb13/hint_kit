@@ -1,0 +1,30 @@
+name: hint_kit
+description: >-
+  Tooltips, persistent hints and spotlight guided tours from one overlay
+  engine, one placement resolver and one theme. Zero runtime dependencies.
+version: 0.1.0
+repository: https://github.com/your-org/hint_kit
+issue_tracker: https://github.com/your-org/hint_kit/issues
+documentation: https://github.com/your-org/hint_kit#readme
+
+topics:
+  - tooltip
+  - onboarding
+  - overlay
+  - showcase
+  - ui
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
