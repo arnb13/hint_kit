@@ -52,9 +52,18 @@ Every one of these is the example app on a device — nothing is mocked up. Run 
 
 ## Install
 
+```yaml
+dependencies:
+  hint_kit: ^1.0.0
+```
+
+Or from the command line:
+
 ```bash
 flutter pub add hint_kit
 ```
+
+Then:
 
 ```dart
 import 'package:hint_kit/hint_kit.dart';
