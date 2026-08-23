@@ -11,18 +11,18 @@ screenshots:
   - description: >-
       A hint on a disabled button, the ready-made designs, a queue of tips and
       the four-step tour, recorded from the example app.
-    path: doc/hint_kit.gif
+    path: screenshots/hint_kit.gif
   - description: >-
       A hint on a disabled button — the case most people arrive here for.
-    path: doc/hint_on_disabled.png
+    path: screenshots/1-hint-on-disabled.png
   - description: >-
       A tour step: the spotlight cuts a real hole in the scrim and the card is
       the same bubble a tooltip uses.
-    path: doc/tour_step.png
+    path: screenshots/4-tour-step.png
   - description: >-
       The same screen in dark mode. The bubble inverts on its own, with no
       configuration.
-    path: doc/dark_mode.png
+    path: screenshots/6-dark-mode.png
 
 topics:
   - tooltip

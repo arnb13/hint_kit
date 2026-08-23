@@ -4,17 +4,21 @@ Tooltips, persistent hints and spotlight guided tours — from **one overlay eng
 
 **Zero runtime dependencies.** Pure Flutter, WASM-safe, no `dart:io`, no `dart:html`.
 
-<!-- pub.dev needs an absolute URL for images, so these are served from the
-     repository rather than by a relative path. -->
-<img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/hint_kit.gif" alt="hint_kit: a hint on a disabled button, four designs, a queue of tips, a beacon, the scrim being retinted, and a four-step tour that crosses a route" width="300">
+<img src="screenshots/hint_kit.gif" alt="hint_kit: a hint on a disabled button, four designs, a queue of tips, a beacon, the scrim being retinted, and a four-step tour that crosses a route" width="280">
 
 Recorded from `example/`: a hint on a **disabled** button, four of the ten ready-made designs, a transition and a hand-drawn caret, a show-once callout, a queue of tips, a `Beacon`, the scrim's colour and opacity being changed live — then the four-step tour, with the spotlight travelling between targets, a step that expands a panel before it appears, and a last step that waits on another route.
 
-<img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/screenshots.png" alt="Four screenshots: a hint on a disabled button, the branded preset, a tour step with its spotlight, and the same screen in dark mode">
+## Screenshots
 
-*A hint on a disabled button · the `branded` preset · a passthrough tour step, spotlight and all · the same screen in dark mode, where the defaults invert on their own.*
+| A hint on a **disabled** button | The `branded` preset | The `glass` preset |
+| --- | --- | --- |
+| [![A dark tooltip pointing at a disabled Check in button](screenshots/1-hint-on-disabled.png)](screenshots/1-hint-on-disabled.png) | [![A tinted bubble using the branded preset](screenshots/2-preset-branded.png)](screenshots/2-preset-branded.png) | [![A translucent bubble over a blurred background](screenshots/3-preset-glass.png)](screenshots/3-preset-glass.png) |
 
-Run it yourself: `cd example && flutter run`.
+| A tour step, spotlight and all | A retinted, lighter scrim | Dark mode, unconfigured |
+| --- | --- | --- |
+| [![A passthrough tour step with a hole cut in the scrim](screenshots/4-tour-step.png)](screenshots/4-tour-step.png) | [![The same tour over a navy scrim at 55%, with the controls that set it](screenshots/5-scrim-tinted.png)](screenshots/5-scrim-tinted.png) | [![The same screen in dark mode with an inverted bubble](screenshots/6-dark-mode.png)](screenshots/6-dark-mode.png) |
+
+Every one of these is the example app on a device — nothing is mocked up. Run it yourself: `cd example && flutter run`.
 
 ## Why
 
