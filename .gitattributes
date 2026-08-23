@@ -1,0 +1,9 @@
+# Keep line endings stable across machines: LF in the repository, whatever
+# the platform prefers in the working tree.
+* text=auto eol=lf
+
+# Goldens are binary; never let normalisation touch them.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary

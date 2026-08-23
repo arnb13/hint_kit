@@ -3,6 +3,8 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - build/**
+    # Written by the IDE's assets-generator plugin; not part of the package.
+    - lib/generated/**
     - example/build/**
     - android/**
     - ios/**
