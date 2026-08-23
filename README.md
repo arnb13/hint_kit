@@ -6,7 +6,7 @@ Tooltips, persistent hints and spotlight guided tours — from **one overlay eng
 
 | Hints, designs and animations | A four-step guided tour |
 | --- | --- |
-| ![A hint on a disabled button, three of the ready-made designs, the transitions, a hand-drawn caret and a show-once callout](screenshots/hints.gif) | ![A tour: the spotlight travels between targets, step 3 expands a panel first, and step 4 waits for another route](screenshots/tour.gif) |
+| ![A hint on a disabled button, three of the ready-made designs, the transitions, a hand-drawn caret and a show-once callout](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/hints.gif) | ![A tour: the spotlight travels between targets, step 3 expands a panel first, and step 4 waits for another route](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/tour.gif) |
 
 Both recorded on a device from `example/`, captioned as they go. The tour is the one worth watching: the spotlight **travels** between targets rather than cutting, step 3 expands a panel before it appears, and step 4 waits until you push the route it lives on.
 
@@ -14,11 +14,11 @@ Both recorded on a device from `example/`, captioned as they go. The tour is the
 
 | A hint on a **disabled** button | The `branded` preset | The `glass` preset |
 | --- | --- | --- |
-| [![A dark tooltip pointing at a disabled Check in button](screenshots/1-hint-on-disabled.png)](screenshots/1-hint-on-disabled.png) | [![A tinted bubble using the branded preset](screenshots/2-preset-branded.png)](screenshots/2-preset-branded.png) | [![A translucent bubble over a blurred background](screenshots/3-preset-glass.png)](screenshots/3-preset-glass.png) |
+| [![A dark tooltip pointing at a disabled Check in button](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/1-hint-on-disabled.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/1-hint-on-disabled.png) | [![A tinted bubble using the branded preset](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/2-preset-branded.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/2-preset-branded.png) | [![A translucent bubble over a blurred background](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/3-preset-glass.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/3-preset-glass.png) |
 
 | A tour step, spotlight and all | A retinted, lighter scrim | Dark mode, unconfigured |
 | --- | --- | --- |
-| [![A passthrough tour step with a hole cut in the scrim](screenshots/4-tour-step.png)](screenshots/4-tour-step.png) | [![The same tour over a navy scrim at 55%, with the controls that set it](screenshots/5-scrim-tinted.png)](screenshots/5-scrim-tinted.png) | [![The same screen in dark mode with an inverted bubble](screenshots/6-dark-mode.png)](screenshots/6-dark-mode.png) |
+| [![A passthrough tour step with a hole cut in the scrim](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/4-tour-step.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/4-tour-step.png) | [![The same tour over a navy scrim at 55%, with the controls that set it](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/5-scrim-tinted.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/5-scrim-tinted.png) | [![The same screen in dark mode with an inverted bubble](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/6-dark-mode.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/6-dark-mode.png) |
 
 Every one of these is the example app on a device — nothing is mocked up. Run it yourself: `cd example && flutter run`.
 
@@ -776,4 +776,4 @@ Goldens are the only regression net for the arrow geometry, and they live in `te
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/arnb13/hint_kit/blob/master/LICENSE).
