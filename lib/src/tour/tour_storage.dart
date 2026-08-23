@@ -8,8 +8,12 @@ library;
 /// Wire it to whatever the app already uses — `shared_preferences`, Hive,
 /// SQLite, a server flag:
 ///
+/// Prefer `extends` to `implements`: the resume hooks — [lastIndex] and
+/// [saveIndex] — have do-nothing defaults, and a subclass inherits them, while
+/// an implementation has to write both out.
+///
 /// ```dart
-/// class PrefsTourStorage implements TourStorage {
+/// class PrefsTourStorage extends TourStorage {
 ///   PrefsTourStorage(this.prefs);
 ///   final SharedPreferences prefs;
 ///

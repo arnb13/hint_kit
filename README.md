@@ -4,12 +4,9 @@ Tooltips, persistent hints and spotlight guided tours — from **one overlay eng
 
 **Zero runtime dependencies.** Pure Flutter, WASM-safe, no `dart:io`, no `dart:html`.
 
-[![CI](https://github.com/arnb13/hint_kit/actions/workflows/ci.yml/badge.svg)](https://github.com/arnb13/hint_kit/actions/workflows/ci.yml)
-[**Live demo →**](https://arnb13.github.io/hint_kit/) — the example app, built for the web on every push to `master`.
-
-<!-- pub.dev needs an absolute URL for images, so this is served from the repo
-     rather than by a relative path. -->
-<img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/hint_kit.gif" alt="hint_kit: a hint on a disabled button, four designs, a queue of tips, a beacon, and a four-step tour that crosses a route" width="300">
+<!-- pub.dev needs an absolute URL for images, so these are served from the
+     repository rather than by a relative path. -->
+<img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/hint_kit.gif" alt="hint_kit: a hint on a disabled button, four designs, a queue of tips, a beacon, the scrim being retinted, and a four-step tour that crosses a route" width="300">
 
 Recorded from `example/`: a hint on a **disabled** button, four of the ten ready-made designs, a transition and a hand-drawn caret, a show-once callout, a queue of tips, a `Beacon`, the scrim's colour and opacity being changed live — then the four-step tour, with the spotlight travelling between targets, a step that expands a panel before it appears, and a last step that waits on another route.
 
@@ -17,7 +14,7 @@ Recorded from `example/`: a hint on a **disabled** button, four of the ten ready
 
 *A hint on a disabled button · the `branded` preset · a passthrough tour step, spotlight and all · the same screen in dark mode, where the defaults invert on their own.*
 
-Run it yourself with `cd example && flutter run`, or open the [live demo](https://arnb13.github.io/hint_kit/).
+Run it yourself: `cd example && flutter run`.
 
 ## Why
 
@@ -57,28 +54,19 @@ That is the whole setup. No initialisation, no global keys, no `GlobalKey<State>
 
 ## Contents
 
-- [Tooltips and hints](#tooltips-and-hints)
-- [Hints on disabled widgets](#hints-on-disabled-widgets)
-- [Rich and interactive bubbles](#rich-and-interactive-bubbles)
-- [Guided tours](#guided-tours)
-- [Spotlights and passthrough](#spotlights-and-passthrough)
-- [A sequence of tips, without a tour](#a-sequence-of-tips-without-a-tour)
-- [Show a hint once, ever](#show-a-hint-once-ever)
-- [Resuming a tour](#resuming-a-tour)
-- [Preparing the UI before a step](#preparing-the-ui-before-a-step)
-- [Persistence](#persistence)
-- [Localisation](#localisation)
-- [Analytics](#analytics)
-- [Beacon](#beacon)
-- [Theming](#theming)
-- [Desktop and web](#desktop-and-web)
-- [Accessibility](#accessibility)
-- [Testing](#testing)
-- [Placement](#placement)
-- [Comparison](#comparison)
-- [Known limitations](#known-limitations)
+**[Hints](#hints)** · [triggers and control](#triggers-and-control) · [on disabled widgets](#on-disabled-widgets) · [rich bubbles](#rich-and-interactive-bubbles) · [show once](#show-a-hint-once-ever) · [a sequence of tips](#a-sequence-of-tips-without-a-tour) · [desktop and web](#desktop-and-web) · [beacon](#beacon)
 
-## Tooltips and hints
+**[Tours](#tours)** · [steps and control](#steps-and-control) · [across routes](#across-routes) · [spotlight and passthrough](#spotlight-and-passthrough) · [how dark the scrim is](#how-dark-the-scrim-is) · [preparing the UI first](#preparing-the-ui-before-a-step) · [resuming](#resuming-a-tour) · [custom cards](#custom-step-cards) · [localisation](#localisation)
+
+**[Theming](#theming)** · [ready-made designs](#ready-made-designs) · [your own design](#your-own-design) · [the arrow](#the-arrow) · [animations](#animations)
+
+**Everything else** · [persistence](#persistence) · [analytics](#analytics) · [accessibility](#accessibility) · [testing](#testing) · [placement](#placement) · [comparison](#comparison) · [known limitations](#known-limitations)
+
+---
+
+## Hints
+
+### Triggers and control
 
 ```dart
 Hint(
@@ -122,7 +110,7 @@ The bubble lives in an `OverlayPortal`, so its lifetime is tied to the widget. P
 
 Only one hint is open at a time app-wide (`exclusive: true`, the default). Set `exclusive: false` for a hint that should survive an unrelated tooltip opening — a validation message pinned to a field, say.
 
-## Hints on disabled widgets
+### On disabled widgets
 
 This works, and it is worth understanding why:
 
@@ -148,7 +136,7 @@ Hint(message: '...', absorbChildInput: true, child: somethingInert)
 
 It puts a transparent hit layer above the child, so it also stops the child receiving pointers. Do not use it on an interactive child.
 
-## Rich and interactive bubbles
+### Rich and interactive bubbles
 
 ```dart
 Hint(
@@ -167,7 +155,85 @@ Hint(
 
 Without `interactive: true` the bubble is decorative: it ignores pointers entirely, so a tap goes to whatever is underneath. With it, moving the pointer from the target into the bubble does not dismiss it, and buttons and links inside actually work.
 
-## Guided tours
+### Show a hint once, ever
+
+The "new feature" callout that must not nag:
+
+```dart
+Hint(
+  showOnce: 'payslip-tip',
+  triggers: const {HintTrigger.onAppear},
+  message: 'Payslips live here now',
+  child: payslipTab,
+)
+```
+
+The key is recorded as the bubble opens, and every later attempt to show it does nothing — trigger, `onAppear` *or* `HintController.show()`, so "once" holds however the hint is opened. Reading the flag is asynchronous and an `onAppear` hint waits for it, which is what stops the race on launch that the feature exists to prevent.
+
+Keys live in `HintRegistry.instance.storage` — the same `TourStorage` interface tours use, so one implementation serves both (see [Persistence](#persistence)):
+
+```dart
+void main() {
+  HintRegistry.instance.storage = myStorage;
+  runApp(const MyApp());
+}
+
+// Let it show again:
+await HintRegistry.instance.resetShowOnce('payslip-tip');
+```
+
+### A sequence of tips, without a tour
+
+A tour dims the screen, traps focus and takes over. Sometimes you just want three tips in order:
+
+```dart
+final tips = HintQueue(<HintController>[_filterTip, _sortTip, _exportTip]);
+
+tips.start();
+```
+
+Each entry drives a `Hint` with `HintTrigger.manual`. The queue opens the first, waits for it to close — however it closes: a tap outside, `showDuration`, Esc, another hint taking the floor — then opens the next after a short `gap`. `next()` skips ahead, `stop()` ends it, and `onFinished` tells you whether it ran out or was cut short. A queue that reaches a hint whose widget is no longer mounted stops rather than opening a bubble pointing at nothing.
+
+### Desktop and web
+
+```dart
+Hint(
+  triggers: const {HintTrigger.secondaryTap},   // right-click
+  mouseCursor: SystemMouseCursors.help,         // over the target
+  message: 'Right-click explains this',
+  child: row,
+)
+
+Hint(
+  followPointer: true,                          // the bubble tracks the cursor
+  triggers: const {HintTrigger.hover},
+  message: 'What is under the pointer, not what is under the widget',
+  child: chart,
+)
+```
+
+`secondaryTap` reads the pointer's buttons, so it never competes with a child's own secondary-tap handler and a primary click does not open it. `followPointer` re-anchors the bubble to the cursor on every move and still runs the full placement resolver, so it flips sides near a screen edge instead of sliding off it; with no pointer — a hint opened from a controller — it falls back to the widget.
+
+### Beacon
+
+```dart
+Beacon(
+  title: 'Duplicate a shift',
+  message: 'Long-press any shift in the calendar to copy it to another day.',
+  pulseCount: 3,                          // then it settles into a static dot
+  child: const Icon(Icons.calendar_month),
+)
+```
+
+A pulsing dot that opens a hint when tapped — the quiet alternative to a tour. The tap target is twice the dot's diameter so it clears platform minimums, and the pulse stops under `MediaQuery.disableAnimations`.
+
+`pulseCount` is worth setting: a dot that pulses for ever keeps competing with the rest of the screen, and it also stops `pumpAndSettle` returning in a widget test. Omit it to pulse indefinitely.
+
+---
+
+## Tours
+
+### Steps and control
 
 ```dart
 TourScope(
@@ -205,11 +271,11 @@ tour.start('onboarding', force: true);   // replay
 tour.next();  tour.previous();  tour.skip();  tour.finish();  tour.cancel();
 ```
 
-`skip()` and `finish()` both record the tour as completed — someone who dismissed the onboarding does not want it again tomorrow. `cancel()` ends it without recording.
+`skip()` and `finish()` both record the tour as completed — someone who dismissed the onboarding does not want it again tomorrow. `cancel()` ends it without recording, which is what makes [resuming](#resuming-a-tour) work.
 
 Keyboard is wired by default: arrows move, Enter advances, Esc skips.
 
-### Tours across routes
+### Across routes
 
 A step whose target is not mounted **waits for it**. It is not skipped and nothing crashes: each step draws into whatever overlay its own target lives in, so pushing the right route resumes the tour exactly where it left off. This is the differentiator against `tutorial_coach_mark`, which needs every target present at once.
 
@@ -219,22 +285,7 @@ Because a tour's length can only count targets that have registered, a route-spa
 TourScope(tourLengths: const {'onboarding': 5}, child: MaterialApp(...))
 ```
 
-### Custom step cards
-
-```dart
-HintTarget(
-  tour: 'onboarding',
-  order: 2,
-  contentBuilder: (context, info) => MyCard(
-    step: info.step,
-    of: info.length,
-    onNext: info.controller.next,
-  ),
-  child: target,
-)
-```
-
-## Spotlights and passthrough
+### Spotlight and passthrough
 
 The scrim is one path — `Path.combine(difference, screen, hole)` — so the hole is genuinely transparent, not four rectangles arranged around a gap.
 
@@ -267,15 +318,21 @@ HintTarget(
 )
 ```
 
+Between steps the hole **travels** from the previous target to the next one rather than cutting, which is what makes a tour read as one continuous thing instead of a slideshow:
+
+```dart
+HintThemeData(spotlightMoveDuration: Duration.zero)   // opt back out
+```
+
+The animation is over a fraction, not over a rect, so the destination stays live: a target that scrolls or resizes mid-travel is still followed, and once the fraction reaches 1 the hole is exactly the tracked rect with no interpolation left to lag behind it. The first step of a tour has nothing to travel from, so it simply lights up; `MediaQuery.disableAnimations` cuts as well.
+
 ### How dark the scrim is
 
-The dim defaults to **90% in light mode and 95% in dark** — a tour step is modal, and a scrim light enough to read the page through invites the user to keep reading the page instead of the step. Both halves are yours to change, independently:
+The dim defaults to **90% in light mode and 95% in dark** — a tour step is modal, and a scrim light enough to read the page through invites the user to keep reading the page instead of the step. Colour and opacity are separate settings:
 
 ```dart
 TourScope(
-  theme: const HintThemeData(
-    scrimOpacity: 0.75,                     // lighter, still neutral black
-  ),
+  theme: const HintThemeData(scrimOpacity: 0.75),   // lighter, still neutral
   child: const MyApp(),
 )
 
@@ -286,111 +343,13 @@ HintThemeData(scrimColor: const Color(0xE60B1B3A))
 HintThemeData(scrimColor: const Color(0xFF0B1B3A), scrimOpacity: 0.8)
 ```
 
-`scrimOpacity` replaces the alpha of whatever colour is in play — an explicit `scrimColor`, a preset's, or the default — so a slider bound to it works without touching the hue. It is clamped to 0..1, and `0` removes the dim entirely while keeping the spotlight and the step card. Per step, per scope or app-wide: it is an ordinary theme field, so `HintTarget(theme: ...)` overrides `TourScope(theme: ...)` overrides `ThemeData.extensions`.
+`scrimOpacity` replaces the alpha of whatever colour is in play — an explicit `scrimColor`, a preset's, or the default — so a slider bound to it works without touching the hue. It is clamped to 0..1, and `0` removes the dim entirely while keeping the spotlight and the step card. It is an ordinary theme field, so `HintTarget(theme: ...)` overrides `TourScope(theme: ...)` overrides `ThemeData.extensions`.
 
 Presets keep their own dims on purpose — `minimal` and `cupertino` are deliberately lighter, `contrast` is nearly solid — so setting `scrimOpacity` alongside a preset is how you overrule that.
 
-Set `scrimBlur` on the theme for a `BackdropFilter` instead of a flat dim. It costs a full-screen `saveLayer` every frame, which is why it is off by default.
+Set `scrimBlur` for a `BackdropFilter` instead of a flat dim. It costs a full-screen `saveLayer` every frame, which is why it is off by default.
 
-Between steps the hole **travels** from the previous target to the next one rather than cutting, which is what makes a tour read as one continuous thing instead of a slideshow:
-
-```dart
-HintThemeData(spotlightMoveDuration: Duration.zero)   // opt back out
-```
-
-The animation is over a fraction, not over a rect, so the destination stays live: a target that scrolls or resizes mid-travel is still followed, and once the fraction reaches 1 the hole is exactly the tracked rect with no interpolation left to lag behind it. The first step of a tour has nothing to travel from, so it simply lights up; `MediaQuery.disableAnimations` cuts as well.
-
-## A sequence of tips, without a tour
-
-A tour dims the screen, traps focus and takes over. Sometimes you just want three tips in order:
-
-```dart
-final tips = HintQueue(<HintController>[_filterTip, _sortTip, _exportTip]);
-
-tips.start();
-```
-
-Each entry drives a `Hint` with `HintTrigger.manual`. The queue opens the first, waits for it to close — however it closes: a tap outside, `showDuration`, Esc, another hint taking the floor — then opens the next after a short `gap`. `next()` skips ahead, `stop()` ends it, and `onFinished` tells you whether it ran out or was cut short. A queue that reaches a hint whose widget is no longer mounted stops rather than opening a bubble pointing at nothing.
-
-## Show a hint once, ever
-
-The "new feature" callout that must not nag:
-
-```dart
-Hint(
-  showOnce: 'payslip-tip',
-  triggers: const {HintTrigger.onAppear},
-  message: 'Payslips live here now',
-  child: payslipTab,
-)
-```
-
-The key is recorded as the bubble opens, and every later attempt to show it does nothing — trigger, `onAppear` *or* `HintController.show()`, so "once" holds however the hint is opened. Reading the flag is asynchronous and an `onAppear` hint waits for it, which is what stops the race on launch that the feature exists to prevent.
-
-Keys live in `HintRegistry.instance.storage` — the same `TourStorage` interface tours use, so one implementation serves both:
-
-```dart
-void main() {
-  HintRegistry.instance.storage = myStorage;   // see Persistence
-  runApp(const MyApp());
-}
-
-// Let it show again:
-await HintRegistry.instance.resetShowOnce('payslip-tip');
-```
-
-## Persistence
-
-The shortest path from the in-memory default to something real is two closures — no subclass, no dependency:
-
-```dart
-final storage = CallbackTourStorage(
-  isCompleted: (key) async => prefs.getBool('seen.$key') ?? false,
-  setCompleted: (key, done) async =>
-      done ? prefs.setBool('seen.$key', true) : prefs.remove('seen.$key'),
-);
-
-TourScope(storage: storage, child: const MyApp());
-HintRegistry.instance.storage = storage;   // the same store for showOnce hints
-```
-
-One setter covers both writes: `markCompleted` calls it with `true` and `reset` with `false`, so the two can never disagree about where the flag lives.
-
-Implementing the interface yourself works just as well:
-
-```dart
-class PrefsTourStorage implements TourStorage {
-  PrefsTourStorage(this.prefs);
-  final SharedPreferences prefs;
-
-  @override
-  Future<bool> isCompleted(String tour) async => prefs.getBool('tour.$tour') ?? false;
-
-  @override
-  Future<void> markCompleted(String tour) async => prefs.setBool('tour.$tour', true);
-
-  @override
-  Future<void> reset(String tour) async => prefs.remove('tour.$tour');
-}
-```
-
-The default `InMemoryTourStorage` forgets on restart, so **every tour runs again on the next launch until you wire up persistence**. That is deliberate: it is obvious, it never silently loses data, and it makes the missing step impossible to overlook.
-
-## Resuming a tour
-
-A user who quits three steps into onboarding should not start again from step one:
-
-```dart
-// On launch, or behind a "Continue" button:
-tour.start('onboarding', resume: true);
-
-// Decide between "Start" and "Continue" without starting anything:
-final bool canResume = await tour.hasProgress('onboarding');
-```
-
-The position is written on every step change and cleared when the tour **finishes or is skipped**, so only an interrupted tour resumes — a closed app, a killed process, a `cancel()`. It needs a storage that implements `lastIndex`/`saveIndex`; `InMemoryTourStorage` does (for the session), `CallbackTourStorage` takes them as two more optional closures, and the defaults on `TourStorage` do nothing, so a storage written before this existed keeps working and simply never resumes.
-
-## Preparing the UI before a step
+### Preparing the UI before a step
 
 A step can open the thing it is about to point at, and the tour waits for it:
 
@@ -406,7 +365,47 @@ HintTarget(
 
 Nothing is drawn until the future completes — no scrim, no card, no spotlight — and if the user leaves the step while it is still running, the result is discarded rather than opening a step the tour has moved past.
 
-## Localisation
+### Resuming a tour
+
+A user who quits three steps into onboarding should not start again from step one:
+
+```dart
+// On launch, or behind a "Continue" button:
+tour.start('onboarding', resume: true);
+
+// Decide between "Start" and "Continue" without starting anything:
+final bool canResume = await tour.hasProgress('onboarding');
+```
+
+The position is written on every step change and cleared when the tour **finishes or is skipped**, so only an interrupted tour resumes — a closed app, a killed process, a `cancel()`. A good place for that `cancel()` is the lifecycle handler:
+
+```dart
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.paused && tour.isRunning) {
+    tour.cancel();      // keeps the position; skip() and finish() clear it
+  }
+}
+```
+
+It needs a storage that implements `lastIndex`/`saveIndex`; `InMemoryTourStorage` does (for the session), `CallbackTourStorage` takes them as two more optional closures, and the defaults on `TourStorage` do nothing — so a storage written before this existed keeps working and simply never resumes.
+
+### Custom step cards
+
+```dart
+HintTarget(
+  tour: 'onboarding',
+  order: 2,
+  contentBuilder: (context, info) => MyCard(
+    step: info.step,
+    of: info.length,
+    onNext: info.controller.next,
+  ),
+  child: target,
+)
+```
+
+### Localisation
 
 The package ships no translations — zero dependencies rules out `intl` and generated ARB lookups. Every word on the step card is a value instead, so it comes from whatever localisation the app already has:
 
@@ -437,42 +436,7 @@ contentBuilder: (context, info) => Column(children: [
 ]),
 ```
 
-## Analytics
-
-One observer sees every hint and every tour in the app — the registry is process-global, so it does not miss bubbles on other routes or in other overlays:
-
-```dart
-class HintAnalytics extends HintObserver {
-  @override
-  void didShowHint(HintEvent event) =>
-      analytics.log('hint_shown', {'id': event.id, 'via': event.trigger?.name});
-
-  @override
-  void didEndTour(String tour, TourEndReason reason) =>
-      analytics.log('tour_${reason.name}', {'tour': tour});
-}
-
-HintRegistry.instance.addObserver(HintAnalytics());
-```
-
-`HintObserver` also has `didDismissHint`, `didStartTour` and `didChangeTourStep`. Every method has an empty default body, so you override only what you need — and extending it means a method added later will not break your class.
-
-Give hints an `analyticsId` for a key that survives a copywriter: `HintEvent.label` falls back to the hint's text, and text changes.
-
-## Beacon
-
-```dart
-Beacon(
-  title: 'Duplicate a shift',
-  message: 'Long-press any shift in the calendar to copy it to another day.',
-  pulseCount: 3,                          // then it settles into a static dot
-  child: const Icon(Icons.calendar_month),
-)
-```
-
-A pulsing dot that opens a hint when tapped — the quiet alternative to a tour. The tap target is twice the dot's diameter so it clears platform minimums, and the pulse stops under `MediaQuery.disableAnimations`.
-
-`pulseCount` is worth setting: a dot that pulses for ever keeps competing with the rest of the screen, and it also means `pumpAndSettle` never returns in a widget test. Omit it for the old behaviour.
+---
 
 ## Theming
 
@@ -488,7 +452,7 @@ MaterialApp(
         borderRadius: BorderRadius.all(Radius.circular(10)),
         arrowSize: Size(16, 8),
         maxWidth: 300,
-        scrimColor: Color(0xCC000000),
+        scrimOpacity: 0.85,
       ),
     ],
   ),
@@ -504,7 +468,7 @@ Resolution is **per field**, in this order:
 
 So overriding one colour on one hint keeps every other value from the app theme. With no configuration at all, bubbles read correctly in both light and dark mode — the defaults come from `colorScheme.inverseSurface`.
 
-Covered: colours, border, radius, elevation and shadow, padding, arrow size, shape and inset, gap, screen margin, max width, text styles, transition duration and curve, scrim colour and blur, spotlight radius and padding.
+Covered: colours, border, radius, elevation and shadow, padding, arrow size, shape, inset and custom path, gap, screen margin, max width, text styles, transitions and their duration and curve, background blur, scrim colour, opacity and blur, spotlight radius, padding and travel time.
 
 ### Ready-made designs
 
@@ -564,7 +528,7 @@ final HintThemeData mine = HintPreset.card.themeData(context).copyWith(
 );
 ```
 
-For content that is not a title and a message at all, `contentBuilder` (on `Hint`) and `contentBuilder` (on `HintTarget`) hand you the bubble with arbitrary widgets inside, and `HintBubbleDecoration` gives you the bubble chrome — outline, fill, fused arrow, shadow — around anything you like, with no overlay involved.
+For content that is not a title and a message at all, `contentBuilder` hands you the bubble with arbitrary widgets inside, and `HintBubbleDecoration` gives you the bubble chrome — outline, fill, fused arrow, shadow — around anything you like, with no overlay involved.
 
 ### The arrow
 
@@ -638,34 +602,71 @@ To build on a preset instead of starting from nothing, call one: `HintTransition
 
 Every transition runs on the same animation, so duration, reverse duration and curve all apply — and all of them collapse to an instant appearance under `MediaQuery.disableAnimations`.
 
-## Desktop and web
+## Persistence
+
+One store serves both tours and show-once hints. The shortest path from the in-memory default to something real is two closures — no subclass, no dependency:
 
 ```dart
-Hint(
-  triggers: const {HintTrigger.secondaryTap},   // right-click
-  mouseCursor: SystemMouseCursors.help,         // over the target
-  message: 'Right-click explains this',
-  child: row,
-)
+final storage = CallbackTourStorage(
+  isCompleted: (key) async => prefs.getBool('seen.$key') ?? false,
+  setCompleted: (key, done) async =>
+      done ? prefs.setBool('seen.$key', true) : prefs.remove('seen.$key'),
+);
 
-Hint(
-  followPointer: true,                          // the bubble tracks the cursor
-  triggers: const {HintTrigger.hover},
-  message: 'What is under the pointer, not what is under the widget',
-  child: chart,
-)
+TourScope(storage: storage, child: const MyApp());
+HintRegistry.instance.storage = storage;   // the same store for showOnce hints
 ```
 
-`secondaryTap` reads the pointer's buttons, so it never competes with a child's own secondary-tap handler and a primary click does not open it. `followPointer` re-anchors the bubble to the cursor on every move and still runs the full placement resolver, so it flips sides near a screen edge instead of sliding off it; with no pointer — a hint opened from a controller — it falls back to the widget.
+One setter covers both writes: `markCompleted` calls it with `true` and `reset` with `false`, so the two can never disagree about where the flag lives. Add the optional `lastIndex` and `saveIndex` closures to support [resuming](#resuming-a-tour).
+
+Implementing the interface yourself works just as well:
+
+```dart
+class PrefsTourStorage extends TourStorage {
+  PrefsTourStorage(this.prefs);
+  final SharedPreferences prefs;
+
+  @override
+  Future<bool> isCompleted(String tour) async => prefs.getBool('tour.$tour') ?? false;
+
+  @override
+  Future<void> markCompleted(String tour) async => prefs.setBool('tour.$tour', true);
+
+  @override
+  Future<void> reset(String tour) async => prefs.remove('tour.$tour');
+}
+```
+
+The default `InMemoryTourStorage` forgets on restart, so **every tour runs again on the next launch until you wire up persistence**. That is deliberate: it is obvious, it never silently loses data, and it makes the missing step impossible to overlook.
+
+## Analytics
+
+One observer sees every hint and every tour in the app — the registry is process-global, so it does not miss bubbles on other routes or in other overlays:
+
+```dart
+class HintAnalytics extends HintObserver {
+  @override
+  void didShowHint(HintEvent event) =>
+      analytics.log('hint_shown', {'id': event.id, 'via': event.trigger?.name});
+
+  @override
+  void didEndTour(String tour, TourEndReason reason) =>
+      analytics.log('tour_${reason.name}', {'tour': tour});
+}
+
+HintRegistry.instance.addObserver(HintAnalytics());
+```
+
+`HintObserver` also has `didDismissHint`, `didStartTour` and `didChangeTourStep`. Every method has an empty default body, so you override only what you need — and extending it means a method added later will not break your class.
+
+Give hints an `analyticsId` for a key that survives a copywriter: `HintEvent.label` falls back to the hint's text, and text changes.
 
 ## Accessibility
-
-- Set `followHighContrast: true` on the theme and hints adopt `HintPreset.contrast` whenever the platform asks for high contrast (`MediaQueryData.highContrast`), keeping every field you set explicitly.
-
 
 - `Semantics(tooltip: message)` on the target, and rich content is announced when shown (`semanticsLabel`).
 - `showDuration` auto-hide is **suppressed** under `MediaQuery.accessibleNavigation` — a screen-reader user cannot read a bubble that vanishes in two seconds.
 - Animations collapse to instant under `MediaQuery.disableAnimations`.
+- `followHighContrast: true` on the theme adopts `HintPreset.contrast` whenever the platform asks for high contrast (`MediaQueryData.highContrast`), keeping every field you set explicitly.
 - The bubble grows with `MediaQuery.textScaler` instead of clipping; the step card's controls wrap rather than overflow.
 - A tour step traps focus in its card and hands it back afterwards.
 - Esc dismisses a hint and skips a tour, without stealing focus from whatever has it.
@@ -681,8 +682,6 @@ setUp(resetHintKit);     // the registry is process-global: reset it between tes
 `resetHintKit()` closes whatever hint holds the floor, drops every observer and replaces the show-once storage. Without it, one test inherits the previous test's open hint and `showOnce` keys — which shows up as a hint that mysteriously refuses to appear.
 
 The same entry point ships `FakeTourStorage` (arrange completed tours and saved positions up front, and assert on the calls it received) and `RecordingHintObserver` (a list of everything the package announced). It deliberately does not depend on `flutter_test`, so it adds nothing to your app's dependency graph — finding a bubble needs no helper, because `find.text('…')` already works.
-
-A `Beacon` that pulses forever always has a frame scheduled, so `pumpAndSettle` never returns while one is on screen. Give it `pulseCount:` or `autoStart: false` in tests.
 
 ## Placement
 
@@ -722,6 +721,7 @@ The bubble body and arrow are drawn as a **single combined path**, so the border
 | `OverlayPortal` (no leaked entries) | ✅ | — | — | — | — | — |
 | `LayerLink` target tracking | ✅ | — | — | ✅ | — | — |
 | Tour steps across routes | ✅ | — | — | n/a | n/a | — |
+| Resume an interrupted tour | ✅ | — | — | n/a | n/a | — |
 | Real hit-test passthrough | ✅ | partial | partial | n/a | n/a | — |
 | Pure, unit-tested placement resolver | ✅ | — | — | — | — | — |
 | Localisable step-card labels | ✅ | — | ✅ | n/a | n/a | — |
@@ -746,7 +746,7 @@ Hint(message: '...', child: IgnorePointer(child: button))
 
 **A tour target that has never been built cannot be scrolled to.** In a lazy `ListView`/`GridView`, an off-screen item does not exist, so it never registers and `Scrollable.ensureVisible` has nothing to call. Either use a non-lazy scroll view for pages with tour steps below the fold (the example does), or scroll to the region yourself before starting the tour. A target that *has* been built and then scrolled away is fine — it re-registers and the tour resumes.
 
-**A running `Beacon` never lets `pumpAndSettle` settle.** Its pulse always has a frame scheduled. Give it `pulseCount:` — which is usually the better UX anyway — or `autoStart: false`, or pump a fixed duration.
+**A `Beacon` that pulses for ever never lets `pumpAndSettle` settle.** Its pulse always has a frame scheduled. Give it `pulseCount:` — usually the better UX anyway — or `autoStart: false`, or pump a fixed duration.
 
 **`Hint` needs an `Overlay` ancestor.** Anything under a `MaterialApp`/`CupertinoApp`/`Navigator` has one. A bare `runApp(Hint(...))` does not, and will tell you so.
 
