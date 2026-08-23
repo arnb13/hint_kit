@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0
+
+No API changes since 0.1.0. The version is the promise: the surface that
+0.1.0 shipped is the one 1.x will keep, and anything that breaks it now needs
+a 2.0.
+
+- The README leads with what the package looks like: two captioned GIFs
+  recorded on a device, six screenshots, a feature list, and install and
+  requirements sections.
+- Images use absolute URLs, which is what pub.dev needs to render them.
+
 ## 0.1.0
 
 First release.

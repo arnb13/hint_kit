@@ -1,16 +1,31 @@
 # hint_kit
 
-Tooltips, persistent hints and spotlight guided tours — from **one overlay engine, one placement resolver, one theme and one controller pattern**.
+[![pub package](https://img.shields.io/pub/v/hint_kit.svg)](https://pub.dev/packages/hint_kit)
+[![pub points](https://img.shields.io/pub/points/hint_kit)](https://pub.dev/packages/hint_kit/score)
+[![likes](https://img.shields.io/pub/likes/hint_kit)](https://pub.dev/packages/hint_kit/score)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/arnb13/hint_kit/blob/master/LICENSE)
 
-**Zero runtime dependencies.** Pure Flutter, WASM-safe, no `dart:io`, no `dart:html`.
+Tooltips, persistent hints and spotlight guided tours for Flutter — from **one overlay engine, one placement resolver, one theme and one controller pattern**. Works on **disabled widgets**, crosses **routes**, and ships with **zero runtime dependencies**.
+
+```dart
+// Explain anything — including a control the user cannot press.
+Hint(
+  message: 'You need an active shift to check in',
+  child: ElevatedButton(onPressed: null, child: Text('Check in')),
+);
+
+// The same bubble, sequenced into a guided tour.
+HintTarget(tour: 'onboarding', order: 1, title: 'Start here', child: button);
+Tour.read(context).start('onboarding');
+```
+
+## Screenshots
 
 | Hints, designs and animations | A four-step guided tour |
 | --- | --- |
 | ![A hint on a disabled button, three of the ready-made designs, the transitions, a hand-drawn caret and a show-once callout](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/hints.gif) | ![A tour: the spotlight travels between targets, step 3 expands a panel first, and step 4 waits for another route](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/tour.gif) |
 
 Both recorded on a device from `example/`, captioned as they go. The tour is the one worth watching: the spotlight **travels** between targets rather than cutting, step 3 expands a panel before it appears, and step 4 waits until you push the route it lives on.
-
-## Screenshots
 
 | A hint on a **disabled** button | The `branded` preset | The `glass` preset |
 | --- | --- | --- |
@@ -21,6 +36,34 @@ Both recorded on a device from `example/`, captioned as they go. The tour is the
 | [![A passthrough tour step with a hole cut in the scrim](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/4-tour-step.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/4-tour-step.png) | [![The same tour over a navy scrim at 55%, with the controls that set it](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/5-scrim-tinted.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/5-scrim-tinted.png) | [![The same screen in dark mode with an inverted bubble](https://raw.githubusercontent.com/arnb13/hint_kit/master/screenshots/6-dark-mode.png)](https://github.com/arnb13/hint_kit/blob/master/screenshots/6-dark-mode.png) |
 
 Every one of these is the example app on a device — nothing is mocked up. Run it yourself: `cd example && flutter run`.
+
+## Features
+
+- 🚫 **Hints on disabled widgets.** Triggers come from a raw `Listener`, never the gesture arena, so a control that ignores pointers still explains itself — and one that handles them keeps its own gesture.
+- 🗺️ **Tours that cross routes.** A step whose target is not mounted *waits* for it. Push the route and the tour resumes; nothing is skipped and nothing crashes.
+- 🔦 **A real spotlight.** One `Path.combine` cuts a genuine hole in the scrim, and `passthrough` changes hit-testing rather than faking it, so the user taps the actual button. Between steps the hole travels rather than cutting.
+- 🎨 **Ten ready-made designs.** `material`, `minimal`, `soft`, `contrast`, `branded`, `sharp`, `card`, `glass`, `cupertino`, `adaptive` — one line each, and every field still yours to override.
+- ✨ **Five transitions, or your own.** `scale`, `fade`, `pop`, `slide`, `none`, plus a builder — and a hand-drawn caret if the two built-in shapes are not enough.
+- 💾 **Show once, and resume.** A hint that appears exactly once per install; a tour that picks up at the step the user abandoned.
+- 🌍 **Localisable.** Every word on the step card is a value, and the step counter is a callback, because "2 of 5" is not universal.
+- 📊 **One analytics hook.** An app-wide observer sees every hint and every tour, on any route, in any overlay.
+- ♿ **Accessible by default.** Semantics, high-contrast adoption, reduced motion, text scaling, focus handling and Esc — all wired, none of it opt-in.
+- 📦 **Zero dependencies.** Pure Flutter, WASM-safe, no `dart:io`, no `dart:html`, no platform channels.
+
+## Install
+
+```bash
+flutter pub add hint_kit
+```
+
+```dart
+import 'package:hint_kit/hint_kit.dart';
+```
+
+## Requirements
+
+- Flutter **3.24** or newer, Dart **3.5** or newer.
+- Android, iOS, web, macOS, Windows and Linux. There is no platform code to configure — nothing to add to a manifest, a plist or a Gradle file.
 
 ## Why
 
