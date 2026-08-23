@@ -42,22 +42,15 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # Goldens are excluded: they are pixel comparisons against PNGs made on
+      # a maintainer's machine, and neither the platform nor the Flutter
+      # version matches here. They still run locally — see the README.
       - name: Test
-        run: flutter test --reporter=expanded
+        run: flutter test --exclude-tags golden --reporter=expanded
 
       - name: Test the example
         run: flutter test --reporter=expanded
         working-directory: example
-
-      # Goldens fail as a pixel diff, which is unreadable in a log. The images
-      # the run produced are the only useful artefact.
-      - name: Upload golden failures
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: golden-failures
-          path: test/failures/
-          if-no-files-found: ignore
 
   publish-dry-run:
     runs-on: ubuntu-latest

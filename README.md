@@ -767,10 +767,10 @@ Issues and PRs welcome. Before submitting:
 ```bash
 dart format .
 flutter analyze          # must be clean
-flutter test             # includes golden tests for the bubble geometry
+flutter test             # goldens included; CI runs --exclude-tags golden
 ```
 
-Goldens are the only regression net for the arrow geometry. If you change the bubble path deliberately, regenerate with `flutter test --update-goldens` and include the images in the PR.
+Goldens are the only regression net for the arrow geometry, and they live in `test/golden_test.dart` behind a `golden` tag. They compare pixels, so they only match on the machine and Flutter version that produced them — which is why CI skips them and you should not. If you change the bubble path deliberately, regenerate with `flutter test --update-goldens` and include the images in the PR.
 
 ## License
 

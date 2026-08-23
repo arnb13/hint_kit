@@ -1,0 +1,7 @@
+# Golden files are pixel comparisons: they only match on the platform and
+# Flutter version that produced them. They are the regression net for the
+# fused bubble-and-arrow path, so they run locally and in a maintainer's
+# `flutter test`, and CI skips them with --exclude-tags golden.
+tags:
+  golden:
+    description: Compares rendered pixels against a checked-in PNG.
