@@ -1,6 +1,7 @@
 /// @docImport 'hint_target.dart';
 library;
 
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/services.dart';
@@ -42,6 +43,8 @@ class TourScope extends StatefulWidget {
     this.labels = const TourLabels(),
     this.tourLengths,
     this.enableKeyboardShortcuts = true,
+    this.stepTimeout,
+    this.onStepUnavailable,
     super.key,
   }) : assert(
           controller == null || storage == null,
@@ -93,6 +96,38 @@ class TourScope extends StatefulWidget {
   ///
   /// Left/up go back, right/down and Enter advance, Escape skips.
   final bool enableKeyboardShortcuts;
+
+  /// How long to wait for a step's target before giving up on it.
+  ///
+  /// A step whose target is not mounted waits — that is what lets a tour cross
+  /// routes, and it is why this is **null by default**: the package cannot
+  /// tell "the user has not opened that screen yet" apart from "this target
+  /// will never exist", and waiting is the safe reading of the two.
+  ///
+  /// Set it when your tour has steps that may genuinely never appear — a
+  /// feature flag, a permission, a role — and you would rather the tour move
+  /// on than sit there:
+  ///
+  /// ```dart
+  /// TourScope(
+  ///   stepTimeout: const Duration(seconds: 5),
+  ///   onStepUnavailable: (String tour, int index) =>
+  ///       analytics.log('tour_step_missing', <String, Object?>{'i': index}),
+  ///   child: const MyApp(),
+  /// )
+  /// ```
+  ///
+  /// Prefer `HintTarget(enabled: false)` where you *know* a step does not
+  /// apply: it keeps the step count honest instead of showing "4 of 5" and
+  /// then skipping one.
+  final Duration? stepTimeout;
+
+  /// Called when [stepTimeout] elapses with no target for the active step.
+  ///
+  /// The tour advances immediately afterwards. Use it to log the gap — a step
+  /// that times out in production usually means a target was removed and its
+  /// tour was not updated.
+  final void Function(String tour, int index)? onStepUnavailable;
 
   @override
   State<TourScope> createState() => TourScopeState();
@@ -147,6 +182,12 @@ class TourScopeState extends State<TourScope> {
   /// Currently mounted targets, per tour and order.
   final Map<String, Map<int, VoidCallback>> _mounted =
       <String, Map<int, VoidCallback>>{};
+
+  /// Orders whose targets have opted out with `enabled: false`.
+  final Map<String, Set<int>> _disabledOrders = <String, Set<int>>{};
+
+  /// Counts down while the active step has no target to draw itself.
+  Timer? _unavailableTimer;
 
   /// The controller this scope drives.
   TourController get controller => _controller;
@@ -220,6 +261,7 @@ class TourScopeState extends State<TourScope> {
     if (!_controller.isRunning) {
       clearSpotlight();
     }
+    _watchForUnavailableStep();
     // Every mounted target re-evaluates whether it is the active step.
     for (final Map<int, VoidCallback> targets in _mounted.values) {
       for (final VoidCallback notify in List<VoidCallback>.of(targets.values)) {
@@ -245,6 +287,7 @@ class TourScopeState extends State<TourScope> {
       'identify steps, so they must be unique within a tour.',
     );
     targets[order] = onTourChanged;
+    _disabledOrders[tour]?.remove(order);
     final SplayTreeSet<int> seen =
         _seenOrders.putIfAbsent(tour, SplayTreeSet<int>.new);
     final bool isNew = seen.add(order);
@@ -253,22 +296,61 @@ class TourScopeState extends State<TourScope> {
     }
     // A target that mounts after its step became active must catch up.
     onTourChanged();
+    _watchForUnavailableStep();
+  }
+
+  /// Records that the target for [tour] at [order] has opted out of the tour.
+  ///
+  /// Called by a [HintTarget] built with `enabled: false`. The step is removed
+  /// from the count rather than merely unmounted, which is the difference that
+  /// matters: an unmounted step is one the tour should *wait* for, and an
+  /// opted-out one is a step this user does not get at all.
+  void disableTarget(String tour, int order) {
+    _mounted[tour]?.remove(order);
+    _seenOrders[tour]?.remove(order);
+    _disabledOrders.putIfAbsent(tour, () => <int>{}).add(order);
+    if (_controller.activeTour != tour) {
+      return;
+    }
+    // Targets register and opt out from didChangeDependencies, which runs
+    // during build. Telling the other steps now would mark them dirty
+    // mid-build and open an OverlayPortal from inside a build — both of which
+    // assert. The work is the same, one frame later.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _controller.activeTour != tour) {
+        return;
+      }
+      updateTourLength(_controller, stepCount(tour));
+      _onTourChanged();
+    });
   }
 
   /// Deregisters a target, called when a [HintTarget] is disposed.
   ///
   /// The order stays in the "seen" set on purpose: a step that scrolled out of
   /// a lazy list, or whose route was pushed over, has not stopped existing.
+  /// Use [disableTarget] for a step that genuinely does not apply.
   void deregisterTarget(String tour, int order) {
     _mounted[tour]?.remove(order);
+    _watchForUnavailableStep();
   }
 
   /// How many steps [tour] has.
   ///
-  /// The declared length from [TourScope.tourLengths] when there is one, else
-  /// the number of distinct orders seen so far.
-  int stepCount(String tour) =>
-      widget.tourLengths?[tour] ?? (_seenOrders[tour]?.length ?? 0);
+  /// The declared length from [TourScope.tourLengths] when there is one, less
+  /// any step that has opted out with `enabled: false`; otherwise the number
+  /// of distinct orders seen so far. Subtracting matters because a declared
+  /// length is a promise about *this* run: a card reading "3 of 5" when two
+  /// steps do not apply to this user is simply wrong.
+  int stepCount(String tour) {
+    final int? declared = widget.tourLengths?[tour];
+    if (declared == null) {
+      return _seenOrders[tour]?.length ?? 0;
+    }
+    final int disabled = _disabledOrders[tour]?.length ?? 0;
+    final int remaining = declared - disabled;
+    return remaining < 0 ? 0 : remaining;
+  }
 
   /// The order that step [index] of [tour] refers to, or null when no target
   /// has claimed that position yet.
@@ -284,6 +366,51 @@ class TourScopeState extends State<TourScope> {
   bool isActiveStep(String tour, int order) =>
       _controller.activeTour == tour &&
       orderAt(tour, _controller.index) == order;
+
+  /// Whether some mounted target is currently drawing the active step.
+  ///
+  /// False in two different situations that look the same from here: no target
+  /// has ever claimed this position, and one has but is not mounted right now
+  /// — a step on a route the user has not pushed. Only a clock can tell them
+  /// apart, which is what [TourScope.stepTimeout] is.
+  bool get _activeStepIsDrawable {
+    final String? tour = _controller.activeTour;
+    if (tour == null) {
+      return true;
+    }
+    final int? order = orderAt(tour, _controller.index);
+    return order != null && (_mounted[tour]?.containsKey(order) ?? false);
+  }
+
+  /// Starts, restarts or cancels the countdown on an undrawable step.
+  void _watchForUnavailableStep() {
+    final Duration? timeout = widget.stepTimeout;
+    final String? tour = _controller.activeTour;
+    if (timeout == null || tour == null || _activeStepIsDrawable) {
+      _unavailableTimer?.cancel();
+      _unavailableTimer = null;
+      return;
+    }
+    if (_unavailableTimer != null) {
+      // Already counting down for this step; restarting it on every rebuild
+      // would mean it never fires.
+      return;
+    }
+    final int index = _controller.index;
+    _unavailableTimer = Timer(timeout, () {
+      _unavailableTimer = null;
+      if (!mounted ||
+          _controller.activeTour != tour ||
+          _controller.index != index ||
+          _activeStepIsDrawable) {
+        return;
+      }
+      widget.onStepUnavailable?.call(tour, index);
+      // next() finishes the tour when there is nothing after this, which is
+      // the right ending for a last step that never arrived.
+      _controller.next();
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Keyboard
@@ -315,6 +442,7 @@ class TourScopeState extends State<TourScope> {
 
   @override
   void dispose() {
+    _unavailableTimer?.cancel();
     _unbind(_controller);
     if (_ownsController) {
       _controller.dispose();

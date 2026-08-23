@@ -116,6 +116,7 @@ class HintTarget extends StatefulWidget {
     this.dismissOnTapOutside = false,
     this.scrollAlignment = 0.5,
     this.beforeShow,
+    this.enabled = true,
     super.key,
   }) : assert(order >= 0, 'order must be non-negative.');
 
@@ -183,6 +184,29 @@ class HintTarget extends StatefulWidget {
   ///
   /// `0.0` is the leading edge, `0.5` the middle, `1.0` the trailing edge.
   final double scrollAlignment;
+
+  /// Whether this step applies to this user at all.
+  ///
+  /// `false` takes the step out of the tour: it is not counted, not ordered
+  /// and never shown, while [child] still renders exactly as it would have.
+  /// That is the difference from simply not building the [HintTarget] — an
+  /// absent target is one the tour *waits* for, because it cannot tell a
+  /// feature the user does not have from a screen they have not opened yet.
+  ///
+  /// ```dart
+  /// HintTarget(
+  ///   tour: 'onboarding',
+  ///   order: 3,
+  ///   enabled: user.canApproveShifts,
+  ///   title: 'Approve a shift',
+  ///   child: approveButton,
+  /// )
+  /// ```
+  ///
+  /// A step counted by [TourScope.tourLengths] is subtracted from the
+  /// declared total when it opts out, so the card reads "3 of 4" rather than
+  /// "3 of 5" with one that never comes.
+  final bool enabled;
 
   /// Runs before this step appears, and is awaited.
   ///
@@ -256,15 +280,33 @@ class _HintTargetState extends State<HintTarget>
     }
     _scope?.deregisterTarget(widget.tour, widget.order);
     _scope = scope;
-    scope.registerTarget(widget.tour, widget.order, _onTourChanged);
+    _joinTour(scope);
+  }
+
+  /// Registers with the scope, or opts out when this step does not apply.
+  void _joinTour(TourScopeState scope) {
+    if (widget.enabled) {
+      scope.registerTarget(widget.tour, widget.order, _onTourChanged);
+    } else {
+      scope.disableTarget(widget.tour, widget.order);
+    }
   }
 
   @override
   void didUpdateWidget(HintTarget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tour != widget.tour || oldWidget.order != widget.order) {
+    if (oldWidget.tour != widget.tour ||
+        oldWidget.order != widget.order ||
+        oldWidget.enabled != widget.enabled) {
       _scope?.deregisterTarget(oldWidget.tour, oldWidget.order);
-      _scope?.registerTarget(widget.tour, widget.order, _onTourChanged);
+      final TourScopeState? scope = _scope;
+      if (scope != null) {
+        _joinTour(scope);
+      }
+      // A step that opts out while it is the one on screen must let go of it.
+      if (!widget.enabled && _isActive) {
+        _deactivate();
+      }
     }
   }
 

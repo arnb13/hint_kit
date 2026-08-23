@@ -3,7 +3,9 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - build/**
-    # Written by the IDE's assets-generator plugin; not part of the package.
+    # The IDE's assets-generator plugin writes here. The package has no
+    # assets, so the folder should stay empty — this keeps a regenerated file
+    # from breaking the build.
     - lib/generated/**
     - example/build/**
     - android/**

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0
+
+A tour could sit there forever, silently, and there was no way to say "this
+step does not apply to this user".
+
+- `HintTarget(enabled: false)` takes a step out of the tour: not counted, not
+  ordered, never shown, while its child renders exactly as before. Use it for
+  a step behind a feature flag, a permission or a role. A step that opts out is
+  subtracted from `TourScope.tourLengths`, so the card cannot promise "of 5"
+  and then deliver four.
+- `TourScope.stepTimeout` and `onStepUnavailable` give the tour a deadline for
+  a step whose target never arrives. Null by default, deliberately: waiting is
+  what lets a tour cross routes, and the package cannot tell a screen the user
+  has not opened from one they never will.
+
+Without either, a tour whose declared length exceeded the targets that ever
+registered stopped drawing anything at all — no scrim, no card, no error — and
+kept its saved position, so resuming returned to the same dead step.
+
+- Removed `lib/generated/assets.dart`, an IDE artefact that shipped in 1.0.0.
+- The README gained a troubleshooting table and a section on steps that may not
+  apply.
+
 ## 1.0.0
 
 No API changes since 0.1.0. The version is the promise: the surface that

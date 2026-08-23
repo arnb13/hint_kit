@@ -54,7 +54,7 @@ Every one of these is the example app on a device — nothing is mocked up. Run 
 
 ```yaml
 dependencies:
-  hint_kit: ^1.0.0
+  hint_kit: ^1.1.0
 ```
 
 Or from the command line:
@@ -114,11 +114,11 @@ That is the whole setup. No initialisation, no global keys, no `GlobalKey<State>
 
 **[Hints](#hints)** · [triggers and control](#triggers-and-control) · [on disabled widgets](#on-disabled-widgets) · [rich bubbles](#rich-and-interactive-bubbles) · [show once](#show-a-hint-once-ever) · [a sequence of tips](#a-sequence-of-tips-without-a-tour) · [desktop and web](#desktop-and-web) · [beacon](#beacon)
 
-**[Tours](#tours)** · [steps and control](#steps-and-control) · [across routes](#across-routes) · [spotlight and passthrough](#spotlight-and-passthrough) · [how dark the scrim is](#how-dark-the-scrim-is) · [preparing the UI first](#preparing-the-ui-before-a-step) · [resuming](#resuming-a-tour) · [custom cards](#custom-step-cards) · [localisation](#localisation)
+**[Tours](#tours)** · [steps and control](#steps-and-control) · [across routes](#across-routes) · [spotlight and passthrough](#spotlight-and-passthrough) · [how dark the scrim is](#how-dark-the-scrim-is) · [preparing the UI first](#preparing-the-ui-before-a-step) · [resuming](#resuming-a-tour) · [steps that may not apply](#steps-that-may-not-apply) · [custom cards](#custom-step-cards) · [localisation](#localisation)
 
 **[Theming](#theming)** · [ready-made designs](#ready-made-designs) · [your own design](#your-own-design) · [the arrow](#the-arrow) · [animations](#animations)
 
-**Everything else** · [persistence](#persistence) · [analytics](#analytics) · [accessibility](#accessibility) · [testing](#testing) · [placement](#placement) · [comparison](#comparison) · [known limitations](#known-limitations)
+**Everything else** · [persistence](#persistence) · [troubleshooting](#troubleshooting) · [analytics](#analytics) · [accessibility](#accessibility) · [testing](#testing) · [placement](#placement) · [comparison](#comparison) · [known limitations](#known-limitations)
 
 ---
 
@@ -455,6 +455,37 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 ```
 
 It needs a storage that implements `lastIndex`/`saveIndex`; `InMemoryTourStorage` does (for the session), `CallbackTourStorage` takes them as two more optional closures, and the defaults on `TourStorage` do nothing — so a storage written before this existed keeps working and simply never resumes.
+
+### Steps that may not apply
+
+A step behind a feature flag, a permission or a role should say so, because a
+`HintTarget` that is simply not built is one the tour **waits for** — it cannot
+tell "this user does not have that feature" from "this user has not opened that
+screen yet":
+
+```dart
+HintTarget(
+  tour: 'onboarding',
+  order: 3,
+  enabled: user.canApproveShifts,   // not counted, not ordered, never shown
+  title: 'Approve a shift',
+  child: approveButton,
+)
+```
+
+The child renders either way; only the tour ignores it. A step that opts out is subtracted from `tourLengths` too, so the card reads "3 of 4" rather than "3 of 5" with one that never comes.
+
+For the cases you cannot predict — a target deleted in a refactor, a screen that fails to load — give the scope a deadline:
+
+```dart
+TourScope(
+  stepTimeout: const Duration(seconds: 5),
+  onStepUnavailable: (tour, index) => analytics.log('tour_step_missing', index),
+  child: const MyApp(),
+)
+```
+
+It is null by default, and deliberately: waiting forever is what makes tours across routes work, and a timeout that fires while the user is still navigating would break exactly the feature that sets this package apart. Set it only when you would rather the tour move on than hang.
 
 ### Custom step cards
 
@@ -797,6 +828,20 @@ The bubble body and arrow are drawn as a **single combined path**, so the border
 | Fused bubble + arrow path | ✅ | n/a | n/a | — | — | n/a |
 
 Compiled from each package's public API and documentation at the time of writing; "partial" means the behaviour exists but is implemented by positioning transparent regions rather than by changing hit-testing. Dependency counts change often enough that they are not listed here — check pub.dev; hint_kit's is zero and is a design constraint, not a coincidence. Correct me with an issue if any row is out of date.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| **A hint never appears** | An `IgnorePointer` or `AbsorbPointer` *above* the `Hint` is eating the pointer before it arrives — move the `Hint` outside it. Or the trigger you set is not the one you are performing: the default is `longPress` + `hover`, so a tap does nothing. |
+| **It appeared once and never again** | `showOnce` did its job. Clear it with `HintRegistry.instance.resetShowOnce('key')`, and remember the key is process-global — in tests, `resetHintKit()` from `package:hint_kit/testing.dart`. |
+| **A hint closes as soon as another opens** | Exclusivity, which is on by default. Pass `exclusive: false` for one that should hold its ground, such as a validation message pinned to a field. |
+| **`No Overlay found`** | `Hint` needs an `Overlay` ancestor. Anything under a `MaterialApp` / `CupertinoApp` / `Navigator` has one; a bare `runApp(Hint(...))` does not. |
+| **A tour starts and then nothing happens** | The step's target is not mounted, so the tour is waiting for it — a lazy list that has not built it, a route not yet pushed, or a widget behind a flag. Use `enabled: false` for steps that do not apply, or `stepTimeout` to move on anyway. |
+| **The step counter is wrong** | A route-spanning tour can only count targets that have registered. Declare the real length with `tourLengths`, and mark inapplicable steps `enabled: false` so they are subtracted. |
+| **A tour replays every launch** | The default `InMemoryTourStorage` forgets on restart. Wire a real one — see [Persistence](#persistence). |
+| **`pumpAndSettle` never returns in a test** | A `Beacon` pulsing forever always has a frame scheduled. Give it `pulseCount:` or `autoStart: false`. |
+| **The bubble does not follow a moving target** | It follows scroll and layout at the layer level, but the *placement decision* is only re-run on demand. Set `followTarget: true` for a target that animates across a screen edge. |
 
 ## Known limitations
 
