@@ -168,6 +168,14 @@ The bubble lives in an `OverlayPortal`, so its lifetime is tied to the widget. P
 
 Only one hint is open at a time app-wide (`exclusive: true`, the default). Set `exclusive: false` for a hint that should survive an unrelated tooltip opening — a validation message pinned to a field, say.
 
+Three more worth knowing about:
+
+| | |
+| --- | --- |
+| `barrierColor` | Dims the screen behind the bubble, and makes the barrier modal: the dismissing tap is absorbed instead of reaching the app. Left null, the barrier is invisible and taps pass straight through, so a hover tooltip never eats a click. |
+| `followTarget` | Re-measures the target every frame instead of on scroll and resize. The bubble already follows at the layer level; this is for when the *decision* — which side, how far to shift — has to keep up, e.g. a target animating across a screen edge. |
+| `excludeFromSemantics` | Drops the semantic tooltip from the target, for when the child already says the same thing and a screen reader would read it twice. |
+
 ### On disabled widgets
 
 This works, and it is worth understanding why:
