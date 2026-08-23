@@ -11,7 +11,7 @@ Tooltips, persistent hints and spotlight guided tours — from **one overlay eng
      rather than by a relative path. -->
 <img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/hint_kit.gif" alt="hint_kit: a hint on a disabled button, four designs, a queue of tips, a beacon, and a four-step tour that crosses a route" width="300">
 
-Recorded from `example/`: a hint on a **disabled** button, four of the ready-made designs, a show-once callout, a queue of tips, a `Beacon`, then the four-step tour — the spotlight travelling between targets, a step that expands a panel before it appears, and a last step that waits on another route.
+Recorded from `example/`: a hint on a **disabled** button, four of the ten ready-made designs, a transition and a hand-drawn caret, a show-once callout, a queue of tips, a `Beacon`, the scrim's colour and opacity being changed live — then the four-step tour, with the spotlight travelling between targets, a step that expands a panel before it appears, and a last step that waits on another route.
 
 <img src="https://raw.githubusercontent.com/arnb13/hint_kit/master/doc/screenshots.png" alt="Four screenshots: a hint on a disabled button, the branded preset, a tour step with its spotlight, and the same screen in dark mode">
 
