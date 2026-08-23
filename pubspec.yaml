@@ -9,9 +9,9 @@ documentation: https://github.com/arnb13/hint_kit#readme
 
 screenshots:
   - description: >-
-      A hint on a disabled button, the ready-made designs, a queue of tips and
-      the four-step tour, recorded from the example app.
-    path: screenshots/hint_kit.gif
+      A four-step guided tour: the spotlight travels between targets, a step
+      expands a panel before it appears, and the last one waits for its route.
+    path: screenshots/tour.gif
   - description: >-
       A hint on a disabled button — the case most people arrive here for.
     path: screenshots/1-hint-on-disabled.png

@@ -4,9 +4,11 @@ Tooltips, persistent hints and spotlight guided tours — from **one overlay eng
 
 **Zero runtime dependencies.** Pure Flutter, WASM-safe, no `dart:io`, no `dart:html`.
 
-<img src="screenshots/hint_kit.gif" alt="A captioned walkthrough: a hint on a disabled button, the ready-made designs, transitions, a custom caret, show-once, a queue of tips, a beacon, the scrim being retinted, and a four-step tour that crosses a route" width="360">
+| Hints, designs and animations | A four-step guided tour |
+| --- | --- |
+| ![A hint on a disabled button, three of the ready-made designs, the transitions, a hand-drawn caret and a show-once callout](screenshots/hints.gif) | ![A tour: the spotlight travels between targets, step 3 expands a panel first, and step 4 waits for another route](screenshots/tour.gif) |
 
-Every screen above is the example app on a device, captioned as it goes. It ends on the four-step tour: the spotlight travels between targets, step 3 expands a panel before it appears, and step 4 waits on another route until you push it.
+Both recorded on a device from `example/`, captioned as they go. The tour is the one worth watching: the spotlight **travels** between targets rather than cutting, step 3 expands a panel before it appears, and step 4 waits until you push the route it lives on.
 
 ## Screenshots
 
