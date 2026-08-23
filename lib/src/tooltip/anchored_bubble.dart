@@ -2,6 +2,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../core/hint_side.dart';
+import '../core/hint_transition.dart';
 import '../core/measure_size.dart';
 import '../core/placement.dart';
 import '../theme/hint_theme.dart';
@@ -90,6 +91,45 @@ class _AnchoredHintBubbleState extends State<AnchoredHintBubble> {
   Size? _bubbleSize;
   HintPlacement? _placement;
 
+  /// [AnchoredHintBubble.animation] with the theme's curve applied.
+  ///
+  /// Rebuilt only when the animation or the curve actually changes: a
+  /// [CurvedAnimation] owns a listener on its parent and must be disposed, so
+  /// it cannot be created inline in `build`.
+  CurvedAnimation? _curved;
+  Animation<double>? _clamped;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuildCurve();
+  }
+
+  @override
+  void didUpdateWidget(AnchoredHintBubble old) {
+    super.didUpdateWidget(old);
+    if (old.animation != widget.animation ||
+        old.theme.transitionCurve != widget.theme.transitionCurve) {
+      _rebuildCurve();
+    }
+  }
+
+  void _rebuildCurve() {
+    _curved?.dispose();
+    final CurvedAnimation curved = CurvedAnimation(
+      parent: widget.animation,
+      curve: widget.theme.transitionCurve,
+    );
+    _curved = curved;
+    _clamped = clampHintAnimation(curved);
+  }
+
+  @override
+  void dispose() {
+    _curved?.dispose();
+    super.dispose();
+  }
+
   void _onSizeChanged(Size size) {
     if (!mounted || _bubbleSize == size) {
       return;
@@ -169,17 +209,19 @@ class _AnchoredHintBubbleState extends State<AnchoredHintBubble> {
       ),
     );
 
-    // Fade plus a slight scale out of the anchored edge. The scale is small on
-    // purpose: a bubble that pops is noise, a bubble that grows a few percent
-    // reads as "this belongs to the thing you just touched".
-    final Alignment origin = _transformOrigin(placement);
-    bubble = FadeTransition(
-      opacity: widget.animation,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.92, end: 1).animate(widget.animation),
-        alignment: origin,
-        child: bubble,
+    // The show/hide animation: one of the presets, or the theme's own builder.
+    // Everything it needs to know about where the bubble ended up is in the
+    // info object, so a custom transition works on all four sides without
+    // asking about placement itself.
+    bubble = widget.theme.buildTransition(
+      context,
+      HintTransitionInfo(
+        animation: _curved ?? widget.animation,
+        opacity: _clamped ?? widget.animation,
+        side: placement?.side ?? HintSide.bottom,
+        origin: _transformOrigin(placement),
       ),
+      bubble,
     );
 
     // Until the size is known the bubble must still be laid out, so it is

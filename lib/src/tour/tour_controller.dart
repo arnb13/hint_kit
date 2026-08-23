@@ -7,19 +7,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/tour_end_reason.dart';
+import '../tooltip/hint_registry.dart';
 import 'tour_storage.dart';
-
-/// Why a tour ended.
-enum TourEndReason {
-  /// The user reached the last step and confirmed it.
-  finished,
-
-  /// The user dismissed the tour early.
-  skipped,
-
-  /// The tour was stopped in code, or its scope was disposed.
-  cancelled,
-}
 
 /// Signature for [TourController.onStepChanged].
 typedef TourStepCallback = void Function(String tour, int index);
@@ -103,9 +93,29 @@ class TourController extends ChangeNotifier {
   /// unless [force] is set — which is what a "replay the tour" button wants.
   /// Also does nothing when the same tour is already running.
   ///
+  /// With [resume], the tour picks up at the step it had reached when it was
+  /// last interrupted, instead of at the beginning:
+  ///
+  /// ```dart
+  /// // On launch: continue an onboarding the user walked away from.
+  /// tour.start('onboarding', resume: true);
+  /// ```
+  ///
+  /// The position is recorded on every step change and cleared when the tour
+  /// finishes or is skipped, so only an *interrupted* tour resumes — a closed
+  /// app, a killed process, a [cancel]. It needs a [TourStorage] that
+  /// implements [TourStorage.lastIndex] and [TourStorage.saveIndex];
+  /// [InMemoryTourStorage] does, for this session, and the default
+  /// implementations of both do nothing, so a storage written before this
+  /// existed simply never resumes.
+  ///
   /// Awaiting the returned future is optional; the tour is visible as soon as
   /// storage answers.
-  Future<void> start(String tour, {bool force = false}) async {
+  Future<void> start(
+    String tour, {
+    bool force = false,
+    bool resume = false,
+  }) async {
     assert(tour.isNotEmpty, 'A tour needs a name.');
     if (_activeTour == tour) {
       return;
@@ -113,11 +123,46 @@ class TourController extends ChangeNotifier {
     if (!force && await storage.isCompleted(tour)) {
       return;
     }
+    final int start = resume ? await _resumeIndex(tour) : 0;
     _activeTour = tour;
-    _index = 0;
+    _index = start;
     _length = _stepCountFor?.call(tour) ?? 0;
     notifyListeners();
-    onStepChanged?.call(tour, 0);
+    HintRegistry.instance.notifyTourStarted(tour);
+    _stepChanged(tour);
+  }
+
+  /// Where a resumed [tour] should pick up.
+  ///
+  /// Clamped against the *known* length only: a tour whose later targets have
+  /// not registered yet legitimately reports a length of zero, and clamping to
+  /// that would silently restart it from the beginning — the exact bug resuming
+  /// exists to avoid.
+  Future<int?> _savedIndex(String tour) => storage.lastIndex(tour);
+
+  Future<int> _resumeIndex(String tour) async {
+    final int? saved = await _savedIndex(tour);
+    if (saved == null || saved <= 0) {
+      return 0;
+    }
+    final int length = _stepCountFor?.call(tour) ?? 0;
+    return length > 0 && saved >= length ? length - 1 : saved;
+  }
+
+  /// Whether [tour] has a recorded position to resume from.
+  ///
+  /// Use it to decide between "Start the tour" and "Continue where you left
+  /// off" without starting anything:
+  ///
+  /// ```dart
+  /// final bool canResume = await tour.hasProgress('onboarding');
+  /// ```
+  ///
+  /// Always false for a storage that does not record positions, which is the
+  /// default.
+  Future<bool> hasProgress(String tour) async {
+    final int? saved = await _savedIndex(tour);
+    return saved != null && saved > 0;
   }
 
   /// Moves to the next step, or finishes the tour when on the last one.
@@ -132,7 +177,7 @@ class TourController extends ChangeNotifier {
     }
     _index++;
     notifyListeners();
-    onStepChanged?.call(tour, _index);
+    _stepChanged(tour);
   }
 
   /// Moves back one step. A no-op on the first step.
@@ -143,7 +188,7 @@ class TourController extends ChangeNotifier {
     }
     _index--;
     notifyListeners();
-    onStepChanged?.call(tour, _index);
+    _stepChanged(tour);
   }
 
   /// Ends the tour early and records it as completed.
@@ -170,9 +215,25 @@ class TourController extends ChangeNotifier {
     if (markCompleted) {
       // Fire and forget: the UI must not wait on storage to close a tour.
       unawaited(storage.markCompleted(tour));
+      // A tour that ran to its end — or was skipped — has no position worth
+      // resuming; leaving one would drop a replay into the middle.
+      unawaited(storage.saveIndex(tour, null));
     }
     notifyListeners();
     onEnd?.call(tour, reason);
+    HintRegistry.instance.notifyTourEnded(tour, reason);
+  }
+
+  /// Announces the current step to the callback and to every observer, and
+  /// records the position so the tour can be resumed.
+  ///
+  /// One place, so an app-wide observer, a per-controller callback and the
+  /// saved position can never disagree about which step is showing.
+  void _stepChanged(String tour) {
+    onStepChanged?.call(tour, _index);
+    HintRegistry.instance.notifyTourStep(tour, _index);
+    // Fire and forget: a tour must not wait on storage to advance.
+    unawaited(storage.saveIndex(tour, _index));
   }
 
   /// Jumps straight to [index] of the running tour.
@@ -190,7 +251,7 @@ class TourController extends ChangeNotifier {
     }
     _index = clamped;
     notifyListeners();
-    onStepChanged?.call(tour, _index);
+    _stepChanged(tour);
   }
 
   /// Set by the [TourScope] so the controller can ask how many steps a tour

@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../core/hint_observer.dart';
 import '../core/hint_side.dart';
 import '../core/hint_trigger.dart';
 import '../core/rect_tracker.dart';
@@ -100,10 +101,18 @@ class Hint extends StatefulWidget {
     this.followTarget = false,
     this.semanticsLabel,
     this.excludeFromSemantics = false,
+    this.showOnce,
+    this.analyticsId,
+    this.mouseCursor,
+    this.followPointer = false,
     this.onShow,
     this.onDismiss,
     super.key,
   })  : assert(
+          showOnce == null || showOnce.length > 0,
+          'showOnce must be a non-empty key; it is stored verbatim.',
+        ),
+        assert(
           message != null || title != null || contentBuilder != null,
           'A Hint needs a message, a title or a contentBuilder.',
         ),
@@ -208,6 +217,59 @@ class Hint extends StatefulWidget {
   /// a screen reader reads it twice.
   final bool excludeFromSemantics;
 
+  /// Shows this hint only the first time, ever, under this key.
+  ///
+  /// The key is recorded in [HintRegistry.storage] as the bubble opens, and
+  /// every later attempt to show it — by trigger, by controller, by
+  /// [HintTrigger.onAppear] — does nothing. This is the "new feature" callout
+  /// that must not nag:
+  ///
+  /// ```dart
+  /// Hint(
+  ///   showOnce: 'payslip-tip',
+  ///   triggers: const <HintTrigger>{HintTrigger.onAppear},
+  ///   message: 'Payslips live here now',
+  ///   child: payslipTab,
+  /// )
+  /// ```
+  ///
+  /// The default storage forgets on restart; point
+  /// [HintRegistry.storage] at real persistence to make it stick, and use
+  /// [HintRegistry.resetShowOnce] to let a hint appear again.
+  ///
+  /// Reading the flag is asynchronous, so a hint that is already open when the
+  /// answer arrives is left alone: the guard applies to opening, never to
+  /// closing something the user is reading.
+  final String? showOnce;
+
+  /// The cursor shown while the pointer is over the target.
+  ///
+  /// Defaults to whatever the child asks for. [SystemMouseCursors.help] is the
+  /// conventional choice for a target whose whole job is to explain itself.
+  final MouseCursor? mouseCursor;
+
+  /// Anchors the bubble to the pointer instead of to the target.
+  ///
+  /// The bubble follows the cursor while it moves over the target, which is
+  /// what a chart, a map or a canvas wants: the thing being explained is the
+  /// position, not the widget. Placement still runs, so the bubble flips sides
+  /// near a screen edge rather than sliding off it.
+  ///
+  /// Mouse only — a finger is already covering the thing the bubble explains —
+  /// so pair it with [HintTrigger.hover]. With no pointer to follow, e.g. a
+  /// hint opened from a controller, it anchors on the target as usual.
+  ///
+  /// Not compatible with layer-level target tracking: a bubble that follows
+  /// the cursor is positioned in overlay coordinates every move, so it does
+  /// not also follow a scroll on the compositor.
+  final bool followPointer;
+
+  /// A stable identifier reported to a [HintObserver].
+  ///
+  /// Text is the fallback, but text changes; an id does not. Ignored when no
+  /// observer is registered.
+  final String? analyticsId;
+
   /// Called when the hint opens. Useful for onboarding funnels.
   final VoidCallback? onShow;
 
@@ -243,10 +305,33 @@ class _HintState extends State<Hint>
   Offset? _pointerDownPosition;
   int? _pointerDownId;
   bool _pointerMoved = false;
+  bool _pointerDownSecondary = false;
   bool _pointerInTarget = false;
   bool _pointerInBubble = false;
   bool _isShown = false;
   bool _keyHandlerInstalled = false;
+
+  /// Whether [Hint.showOnce] has already been recorded for this key.
+  ///
+  /// Starts pessimistic when there is a key: the flag is read asynchronously,
+  /// and showing a hint that turns out to have been seen is the mistake that
+  /// matters. It is cleared as soon as storage answers "not yet".
+  bool _showOnceBlocked = false;
+
+  /// Completes when the [Hint.showOnce] flag has been read.
+  ///
+  /// Null when the hint has no key, in which case nothing waits.
+  Future<void>? _showOnceReady;
+
+  /// What opened the bubble, for [HintObserver] and nothing else.
+  HintTrigger? _openedBy;
+
+  /// The pointer's position in global coordinates, for [Hint.followPointer].
+  ///
+  /// A [ValueNotifier] rather than state: the bubble rebuilds on every mouse
+  /// move while following, and rebuilding the *target* subtree that often
+  /// would be wasteful. The overlay listens to it, nothing else does.
+  final ValueNotifier<Offset?> _pointer = ValueNotifier<Offset?>(null);
 
   /// Whether the bubble is open, i.e. showing or animating in.
   bool get isShown => _isShown;
@@ -255,15 +340,59 @@ class _HintState extends State<Hint>
   void initState() {
     super.initState();
     _attachController(widget.controller);
+    _readShowOnce();
     if (widget.triggers.contains(HintTrigger.onAppear)) {
       // The target has not been laid out yet; showing now would measure an
       // empty rect.
-      SchedulerBinding.instance.addPostFrameCallback((_) {
+      SchedulerBinding.instance.addPostFrameCallback((_) async {
+        // A showOnce hint waits for storage first, so the very case the key
+        // exists for — "do not show it again on launch" — is not lost to a
+        // race with the first frame.
+        await _showOnceReady;
         if (mounted) {
-          show();
+          _showFrom(HintTrigger.onAppear);
         }
       });
     }
+  }
+
+  /// Reads the [Hint.showOnce] flag, if there is a key.
+  void _readShowOnce() {
+    final String? key = widget.showOnce;
+    if (key == null) {
+      _showOnceBlocked = false;
+      _showOnceReady = null;
+      return;
+    }
+    _showOnceBlocked = true;
+    _showOnceReady = HintRegistry.instance.storage.isCompleted(key).then(
+      (bool seen) {
+        if (mounted) {
+          _showOnceBlocked = seen;
+        }
+      },
+      onError: (Object _) {
+        // A storage that throws must not silence the hint forever; an
+        // unreadable flag is treated as "not seen yet".
+        if (mounted) {
+          _showOnceBlocked = false;
+        }
+      },
+    );
+  }
+
+  /// The event describing this hint, for observers.
+  HintEvent get _event => HintEvent(
+        id: widget.analyticsId,
+        label: widget.semanticsLabel ?? widget.message ?? widget.title,
+        trigger: _openedBy,
+        showOnce: widget.showOnce,
+      );
+
+  /// Opens the bubble and remembers which trigger did it.
+  void _showFrom(HintTrigger? trigger) {
+    _openedBy = trigger;
+    show();
   }
 
   @override
@@ -329,10 +458,21 @@ class _HintState extends State<Hint>
   // ---------------------------------------------------------------------------
 
   /// Opens the bubble.
+  ///
+  /// Does nothing when [Hint.showOnce] names a key that has already been
+  /// recorded — including when called from a [HintController], which is the
+  /// point: "show it once" must hold however the hint is opened.
   void show() {
     if (!mounted || _isShown) {
       return;
     }
+    if (_showOnceBlocked) {
+      // Keep a controller's idea of the world honest: it asked for a bubble
+      // that is never going to appear.
+      _syncController(shown: false);
+      return;
+    }
+    _markShownOnce();
     _isShown = true;
     _cancelWait();
     if (widget.exclusive) {
@@ -354,8 +494,23 @@ class _HintState extends State<Hint>
     _startAutoHideTimer();
     _syncController(shown: true);
     widget.onShow?.call();
+    HintRegistry.instance.notifyShown(_event);
     _announce();
     setState(() {});
+  }
+
+  /// Records the [Hint.showOnce] key as seen, as the bubble opens.
+  ///
+  /// Written on show rather than on dismiss: a user who saw the hint has seen
+  /// it, whether or not they stayed to read it, and a write that waits for the
+  /// dismissal is a write that a killed app loses.
+  void _markShownOnce() {
+    final String? key = widget.showOnce;
+    if (key == null) {
+      return;
+    }
+    _showOnceBlocked = true;
+    unawaited(HintRegistry.instance.storage.markCompleted(key));
   }
 
   /// Closes the bubble.
@@ -371,6 +526,8 @@ class _HintState extends State<Hint>
     HintRegistry.instance.close(this);
     _syncController(shown: false);
     widget.onDismiss?.call();
+    HintRegistry.instance.notifyDismissed(_event);
+    _openedBy = null;
     if (_animationsDisabled) {
       _animation.value = 0;
       _finishHide();
@@ -476,6 +633,9 @@ class _HintState extends State<Hint>
 
   bool get _wantsTap => widget.triggers.contains(HintTrigger.tap);
 
+  bool get _wantsSecondaryTap =>
+      widget.triggers.contains(HintTrigger.secondaryTap);
+
   bool get _wantsLongPress => widget.triggers.contains(HintTrigger.longPress);
 
   bool get _wantsHover => widget.triggers.contains(HintTrigger.hover);
@@ -483,19 +643,22 @@ class _HintState extends State<Hint>
   bool get _wantsFocus => widget.triggers.contains(HintTrigger.focus);
 
   void _onPointerDown(PointerDownEvent event) {
-    if (!_wantsTap && !_wantsLongPress) {
+    if (!_wantsTap && !_wantsLongPress && !_wantsSecondaryTap) {
       return;
     }
     _pointerDownPosition = event.position;
     _pointerDownId = event.pointer;
     _pointerMoved = false;
-    if (_wantsLongPress) {
+    // Which button went down decides which trigger the release belongs to, so
+    // a right-click never opens a tap hint and vice versa.
+    _pointerDownSecondary = event.buttons & kSecondaryButton != 0;
+    if (_wantsLongPress && !_pointerDownSecondary) {
       // Recognised by hand rather than with a LongPressGestureDetector: a
       // gesture recogniser would join the arena and could beat the child's own
       // long press, which would break an enabled child.
       _longPressTimer = Timer(kLongPressTimeout, () {
         if (!_pointerMoved && _pointerDownId == event.pointer) {
-          _toggleFromTrigger();
+          _toggleFromTrigger(HintTrigger.longPress);
         }
       });
     }
@@ -521,8 +684,15 @@ class _HintState extends State<Hint>
         (event.position - origin).distance <= kTouchSlop;
     _pointerDownPosition = null;
     _pointerDownId = null;
-    if (isTap && _wantsTap) {
-      _toggleFromTrigger();
+    if (!isTap) {
+      return;
+    }
+    if (_pointerDownSecondary) {
+      if (_wantsSecondaryTap) {
+        _toggleFromTrigger(HintTrigger.secondaryTap);
+      }
+    } else if (_wantsTap) {
+      _toggleFromTrigger(HintTrigger.tap);
     }
   }
 
@@ -534,34 +704,38 @@ class _HintState extends State<Hint>
   }
 
   /// Opens on a trigger, or closes if this hint is already the open one.
-  void _toggleFromTrigger() {
+  void _toggleFromTrigger(HintTrigger trigger) {
     if (_isShown) {
       hide();
     } else {
-      show();
+      _showFrom(trigger);
     }
   }
 
   void _onEnter(PointerEnterEvent event) {
     _pointerInTarget = true;
     _exitTimer?.cancel();
+    if (widget.followPointer) {
+      _pointer.value = event.position;
+    }
     if (!_wantsHover || _isShown) {
       return;
     }
     if (widget.waitDuration == Duration.zero) {
-      show();
+      _showFrom(HintTrigger.hover);
       return;
     }
     _cancelWait();
     _waitTimer = Timer(widget.waitDuration, () {
       if (_pointerInTarget) {
-        show();
+        _showFrom(HintTrigger.hover);
       }
     });
   }
 
   void _onExit(PointerExitEvent event) {
     _pointerInTarget = false;
+    _pointer.value = null;
     _cancelWait();
     if (!_wantsHover || !_isShown) {
       return;
@@ -592,7 +766,7 @@ class _HintState extends State<Hint>
       return;
     }
     if (hasFocus) {
-      show();
+      _showFrom(HintTrigger.focus);
     } else {
       hide();
     }
@@ -656,10 +830,51 @@ class _HintState extends State<Hint>
     // Rebuilding on the tracker rather than with setState keeps a re-measure
     // from rebuilding the target subtree, which is the expensive half.
     return ListenableBuilder(
-      listenable: _tracker,
+      // While following the pointer the bubble also has to rebuild on every
+      // mouse move, which is a second source of "where does this go".
+      listenable: widget.followPointer
+          ? Listenable.merge(<Listenable>[_tracker, _pointer])
+          : _tracker,
       builder: (BuildContext context, Widget? _) => _buildBubble(context),
     );
   }
+
+  /// Whether the bubble is currently anchored to the cursor.
+  ///
+  /// False until a mouse has actually been over the target, so a
+  /// [Hint.followPointer] hint opened from a controller still points at the
+  /// widget rather than at the origin.
+  bool get _followingPointer => widget.followPointer && _pointer.value != null;
+
+  /// The rect placement should work from: the target, or the pointer.
+  ///
+  /// A cursor has no size, so it becomes a zero-sized rect — the resolver
+  /// treats it like any other target, which is what keeps the bubble on screen
+  /// and flips it near an edge.
+  Rect _anchorRect(Rect target) {
+    final Offset? global = _pointer.value;
+    if (!widget.followPointer || global == null) {
+      return target;
+    }
+    final Offset? local = _toOverlay(global);
+    return local == null
+        ? target
+        : Rect.fromCenter(center: local, width: 0, height: 0);
+  }
+
+  /// Converts a global position into the overlay's coordinate space.
+  Offset? _toOverlay(Offset global) {
+    final RenderObject? box = Overlay.of(
+      context,
+      debugRequiredFor: widget,
+    ).context.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      return box.globalToLocal(global);
+    }
+    return null;
+  }
+
+  void _onHover(PointerHoverEvent event) => _pointer.value = event.position;
 
   Widget _buildBubble(BuildContext overlayContext) {
     final ResolvedHintTheme theme = _resolvedTheme();
@@ -694,13 +909,16 @@ class _HintState extends State<Hint>
             ),
           ),
         AnchoredHintBubble(
-          targetRect: target,
+          targetRect: _anchorRect(target),
           overlaySize: _overlaySize(),
           margin: _margin(theme),
           direction: widget.direction,
           theme: theme,
           animation: _animation,
-          link: _link,
+          // A bubble anchored to the cursor is positioned in overlay
+          // coordinates on every move, so there is nothing for the compositor
+          // to follow.
+          link: _followingPointer ? null : _link,
           builder: (BuildContext context) => _buildContent(context, theme),
         ),
       ],
@@ -765,8 +983,10 @@ class _HintState extends State<Hint>
     // itself, then Listener for the raw pointer stream.
     child = MouseRegion(
       opaque: false,
+      cursor: widget.mouseCursor ?? MouseCursor.defer,
       onEnter: _onEnter,
       onExit: _onExit,
+      onHover: widget.followPointer ? _onHover : null,
       child: child,
     );
 
@@ -810,6 +1030,7 @@ class _HintState extends State<Hint>
     _detachController(widget.controller);
     _tracker.dispose();
     _animation.dispose();
+    _pointer.dispose();
     super.dispose();
   }
 }

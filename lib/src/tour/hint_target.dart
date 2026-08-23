@@ -12,6 +12,7 @@ import '../tooltip/anchored_bubble.dart';
 import '../tooltip/hint_registry.dart';
 import 'spotlight.dart';
 import 'tour_controller.dart';
+import 'tour_labels.dart';
 import 'tour_scope.dart';
 
 /// Signature for building a custom tour step card.
@@ -31,6 +32,7 @@ class TourStepInfo {
     required this.description,
     required this.controller,
     required this.side,
+    this.labels = const TourLabels(),
   });
 
   /// The running tour's name.
@@ -53,6 +55,12 @@ class TourStepInfo {
 
   /// Which side of the target the card was placed on.
   final HintSide side;
+
+  /// The words for this tour's controls, from [TourScope.labels].
+  ///
+  /// A custom card should use these rather than hard-coding English, so that
+  /// replacing the card does not un-localise the tour.
+  final TourLabels labels;
 
   /// The human-facing step number, one-based.
   int get step => index + 1;
@@ -107,6 +115,7 @@ class HintTarget extends StatefulWidget {
     this.showArrow = false,
     this.dismissOnTapOutside = false,
     this.scrollAlignment = 0.5,
+    this.beforeShow,
     super.key,
   }) : assert(order >= 0, 'order must be non-negative.');
 
@@ -175,6 +184,29 @@ class HintTarget extends StatefulWidget {
   /// `0.0` is the leading edge, `0.5` the middle, `1.0` the trailing edge.
   final double scrollAlignment;
 
+  /// Runs before this step appears, and is awaited.
+  ///
+  /// The step opens only once the future completes, which is what lets a step
+  /// prepare the UI it is about to point at: push a route, open a drawer,
+  /// expand a panel, fetch the row it explains.
+  ///
+  /// ```dart
+  /// HintTarget(
+  ///   tour: 'onboarding',
+  ///   order: 3,
+  ///   beforeShow: () => _drawerKey.currentState!.openDrawer(),
+  ///   title: 'Your saved filters live here',
+  ///   child: drawerItem,
+  /// )
+  /// ```
+  ///
+  /// The spotlight and the card wait; the scrim does not appear early. If the
+  /// user leaves the step while the future is still running — a Back, a skip —
+  /// the result is discarded and nothing is shown. An error is not caught: let
+  /// it surface rather than stranding the tour on a step that silently failed
+  /// to prepare.
+  final Future<void> Function()? beforeShow;
+
   @override
   State<HintTarget> createState() => _HintTargetState();
 }
@@ -200,8 +232,20 @@ class _HintTargetState extends State<HintTarget>
     duration: const Duration(milliseconds: 1200),
   );
 
+  /// Drives the spotlight's journey from the previous step's hole to this
+  /// one's. `1` means "arrived", which is also where it sits when there is
+  /// nothing to travel from.
+  late final AnimationController _travel = AnimationController(
+    vsync: this,
+    value: 1,
+    duration: const Duration(milliseconds: 320),
+  );
+
   TourScopeState? _scope;
   bool _isActive = false;
+
+  /// The previous step's hole, captured as this step became active.
+  Rect? _travelFrom;
 
   @override
   void didChangeDependencies() {
@@ -235,14 +279,30 @@ class _HintTargetState extends State<HintTarget>
       return;
     }
     if (active) {
-      _activate();
+      unawaited(_activate());
     } else {
       _deactivate();
     }
   }
 
-  void _activate() {
+  /// Becomes the active step, after [HintTarget.beforeShow] if there is one.
+  ///
+  /// The await is the whole point of the hook, so everything that makes the
+  /// step visible is deferred until it returns — and abandoned if the tour
+  /// moved on meanwhile.
+  Future<void> _activate() async {
     _isActive = true;
+    final Future<void> Function()? before = widget.beforeShow;
+    if (before != null) {
+      await before();
+      if (!mounted || !_isActive) {
+        return;
+      }
+    }
+    // Where the previous step's light was, captured before this step reports
+    // its own — after that, the scope's value is this step's.
+    _travelFrom = _scope?.lastSpotlight;
+    _startTravel();
     // A tour takes the floor: any tooltip left open would sit on top of the
     // scrim looking like part of the step.
     HintRegistry.instance.closeAll();
@@ -261,6 +321,23 @@ class _HintTargetState extends State<HintTarget>
     }
     unawaited(_scrollIntoView());
     setState(() {});
+  }
+
+  /// Runs the spotlight from the previous step's hole to this one's.
+  ///
+  /// The animation is over a *fraction*, not over a rect, so the destination
+  /// stays live: a target that scrolls or resizes mid-travel is followed, and
+  /// once the fraction reaches 1 the hole is exactly the tracked rect again
+  /// with no interpolation left to lag behind it.
+  void _startTravel() {
+    final Duration duration = _resolveTheme().spotlightMoveDuration;
+    if (_travelFrom == null || duration == Duration.zero || _reduceMotion) {
+      _travel.value = 1;
+      return;
+    }
+    _travel.duration = duration;
+    _travel.value = 0;
+    unawaited(_travel.forward());
   }
 
   void _deactivate() {
@@ -367,22 +444,31 @@ class _HintTargetState extends State<HintTarget>
     final EdgeInsets padding =
         widget.spotlightPadding ?? theme.spotlightPadding;
     final Rect hole = target == null ? Rect.zero : padding.inflateRect(target);
+    if (target != null) {
+      // Hand this position to whichever step comes next, so it can travel
+      // from where the light actually is rather than from where the target
+      // was when the step opened.
+      scope.reportSpotlight(hole);
+    }
 
     return Stack(
       children: <Widget>[
         Positioned.fill(
           child: FadeTransition(
             opacity: _animation,
-            child: Spotlight(
-              holeRect: hole,
-              shape: widget.spotlight,
-              borderRadius: theme.spotlightBorderRadius,
-              color: theme.scrimColor,
-              blur: theme.scrimBlur,
-              passthrough: widget.passthrough,
-              pulse: widget.pulse && !_reduceMotion ? _pulse : null,
-              onTapOutside:
-                  widget.dismissOnTapOutside ? scope.controller.skip : null,
+            child: AnimatedBuilder(
+              animation: _travel,
+              builder: (BuildContext context, Widget? child) => Spotlight(
+                holeRect: _travellingHole(hole),
+                shape: widget.spotlight,
+                borderRadius: theme.spotlightBorderRadius,
+                color: theme.scrimColor,
+                blur: theme.scrimBlur,
+                passthrough: widget.passthrough,
+                pulse: widget.pulse && !_reduceMotion ? _pulse : null,
+                onTapOutside:
+                    widget.dismissOnTapOutside ? scope.controller.skip : null,
+              ),
             ),
           ),
         ),
@@ -402,6 +488,20 @@ class _HintTargetState extends State<HintTarget>
     );
   }
 
+  /// [hole] as it looks part-way through the journey from the previous step.
+  ///
+  /// Returns [hole] itself once the travel is done — and immediately, when
+  /// there was no previous step — so nothing is interpolated in the steady
+  /// state that the tracker is meanwhile updating every frame.
+  Rect _travellingHole(Rect hole) {
+    final Rect? from = _travelFrom;
+    if (from == null || _travel.value >= 1) {
+      return hole;
+    }
+    final Curve curve = _resolveTheme().transitionCurve;
+    return Rect.lerp(from, hole, curve.transform(_travel.value)) ?? hole;
+  }
+
   Widget _buildCard(BuildContext context, ResolvedHintTheme theme) {
     final TourScopeState scope = _scope!;
     final TourController controller = scope.controller;
@@ -413,6 +513,7 @@ class _HintTargetState extends State<HintTarget>
       description: widget.description,
       controller: controller,
       side: HintSide.bottom,
+      labels: scope.labels,
     );
     final TourStepBuilder? builder = widget.contentBuilder;
     // A nested focus scope traps Tab inside the card while the step is up, so
@@ -445,6 +546,7 @@ class _HintTargetState extends State<HintTarget>
     _tracker.dispose();
     _animation.dispose();
     _pulse.dispose();
+    _travel.dispose();
     super.dispose();
   }
 }
@@ -491,21 +593,24 @@ class TourStepCard extends StatelessWidget {
           runSpacing: 8,
           children: <Widget>[
             if (info.length > 1)
-              Text('${info.step} of ${info.length}', style: theme.messageStyle),
+              Text(
+                info.labels.progress(info.step, info.length),
+                style: theme.messageStyle,
+              ),
             if (!info.isLast)
               _TourButton(
-                label: 'Skip',
+                label: info.labels.skip,
                 onPressed: info.controller.skip,
                 theme: theme,
               ),
             if (!info.isFirst)
               _TourButton(
-                label: 'Back',
+                label: info.labels.back,
                 onPressed: info.controller.previous,
                 theme: theme,
               ),
             _TourButton(
-              label: info.isLast ? 'Done' : 'Next',
+              label: info.labels.advance(isLast: info.isLast),
               onPressed: info.controller.next,
               theme: theme,
               emphasised: true,

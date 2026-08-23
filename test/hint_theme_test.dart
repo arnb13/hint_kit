@@ -58,6 +58,7 @@ void main() {
     test('covers every field', () {
       const HintThemeData empty = HintThemeData();
       final HintThemeData full = empty.copyWith(
+        preset: HintPreset.minimal,
         backgroundColor: const Color(0xFF000001),
         foregroundColor: const Color(0xFF000002),
         borderColor: const Color(0xFF000003),
@@ -78,11 +79,13 @@ void main() {
         reverseTransitionDuration: const Duration(milliseconds: 14),
         transitionCurve: Curves.bounceIn,
         scrimColor: const Color(0xFF000005),
+        scrimOpacity: 0.5,
         scrimBlur: 15,
         spotlightBorderRadius: BorderRadius.circular(16),
         spotlightPadding: const EdgeInsets.all(17),
       );
       // If a field were dropped from copyWith it would still be null here.
+      expect(full.preset, HintPreset.minimal);
       expect(full.backgroundColor, const Color(0xFF000001));
       expect(full.foregroundColor, const Color(0xFF000002));
       expect(full.borderColor, const Color(0xFF000003));
@@ -103,6 +106,7 @@ void main() {
       expect(full.reverseTransitionDuration, const Duration(milliseconds: 14));
       expect(full.transitionCurve, Curves.bounceIn);
       expect(full.scrimColor, const Color(0xFF000005));
+      expect(full.scrimOpacity, 0.5);
       expect(full.scrimBlur, 15);
       expect(full.spotlightBorderRadius, BorderRadius.circular(16));
       expect(full.spotlightPadding, const EdgeInsets.all(17));
@@ -443,6 +447,129 @@ void main() {
         resolved.reverseTransitionDuration,
         const Duration(milliseconds: 400),
       );
+    });
+  });
+
+  group('the tour scrim', () {
+    testWidgets('is heavy by default, and heavier still in dark mode',
+        (WidgetTester t) async {
+      late ResolvedHintTheme light;
+      await pumpResolved(t, onResolved: (ResolvedHintTheme r) => light = r);
+      expect(light.scrimOpacity, greaterThan(0.85));
+
+      late ResolvedHintTheme dark;
+      await pumpResolved(
+        t,
+        brightness: Brightness.dark,
+        onResolved: (ResolvedHintTheme r) => dark = r,
+      );
+      // MaterialApp animates between themes; without settling, the second
+      // resolve reads a half-lerped scrim.
+      await t.pumpAndSettle();
+      expect(dark.scrimOpacity, greaterThan(light.scrimOpacity));
+    });
+
+    testWidgets('a colour sets the dim through its own alpha',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(scrimColor: Color(0x801B2A4A)),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.scrimColor, const Color(0x801B2A4A));
+      expect(resolved.scrimOpacity, closeTo(0.5, 0.01));
+    });
+
+    testWidgets('scrimOpacity replaces the alpha and keeps the hue',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(
+          scrimColor: Color(0x801B2A4A),
+          scrimOpacity: 0.9,
+        ),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.scrimOpacity, closeTo(0.9, 0.01));
+      // Same navy, different dim.
+      expect(resolved.scrimColor, const Color(0xE61B2A4A));
+    });
+
+    testWidgets('scrimOpacity alone dims the default colour',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(scrimOpacity: 0.25),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.scrimOpacity, closeTo(0.25, 0.01));
+      expect(resolved.scrimColor, const Color(0x40000000));
+    });
+
+    testWidgets('it can be turned off entirely', (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(scrimOpacity: 0),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.scrimOpacity, 0);
+    });
+
+    testWidgets('out-of-range values are clamped', (WidgetTester t) async {
+      late ResolvedHintTheme high;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(scrimOpacity: 4),
+        onResolved: (ResolvedHintTheme r) => high = r,
+      );
+      expect(high.scrimOpacity, 1);
+
+      late ResolvedHintTheme low;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(scrimOpacity: -2),
+        onResolved: (ResolvedHintTheme r) => low = r,
+      );
+      expect(low.scrimOpacity, 0);
+    });
+
+    testWidgets('it applies over a preset\'s scrim too',
+        (WidgetTester t) async {
+      late ResolvedHintTheme preset;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(preset: HintPreset.branded),
+        onResolved: (ResolvedHintTheme r) => preset = r,
+      );
+
+      late ResolvedHintTheme dimmed;
+      await pumpResolved(
+        t,
+        overrides: const HintThemeData(
+          preset: HintPreset.branded,
+          scrimOpacity: 0.4,
+        ),
+        onResolved: (ResolvedHintTheme r) => dimmed = r,
+      );
+      expect(dimmed.scrimOpacity, closeTo(0.4, 0.01));
+      // The brand tint survives; only the dim changed.
+      expect(dimmed.scrimColor, preset.scrimColor.withAlpha(102));
+    });
+
+    testWidgets('a per-instance opacity beats the app-wide one',
+        (WidgetTester t) async {
+      late ResolvedHintTheme resolved;
+      await pumpResolved(
+        t,
+        extension: const HintThemeData(scrimOpacity: 0.3),
+        overrides: const HintThemeData(scrimOpacity: 0.8),
+        onResolved: (ResolvedHintTheme r) => resolved = r,
+      );
+      expect(resolved.scrimOpacity, closeTo(0.8, 0.01));
     });
   });
 }

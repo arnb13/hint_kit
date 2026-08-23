@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/hint_theme.dart';
 import 'tour_controller.dart';
+import 'tour_labels.dart';
 import 'tour_storage.dart';
 
 /// Hosts guided tours for the subtree below it.
@@ -38,6 +39,7 @@ class TourScope extends StatefulWidget {
     this.controller,
     this.storage,
     this.theme,
+    this.labels = const TourLabels(),
     this.tourLengths,
     this.enableKeyboardShortcuts = true,
     super.key,
@@ -64,6 +66,13 @@ class TourScope extends StatefulWidget {
   ///
   /// Merged over the ambient [HintThemeData] the same way a per-hint theme is.
   final HintThemeData? theme;
+
+  /// The words on the default step card.
+  ///
+  /// Defaults to English. Supply your own to localise the tour — see
+  /// [TourLabels], which takes them one by one rather than by locale so they
+  /// can come from whatever localisation the app already has.
+  final TourLabels labels;
 
   /// Declares how many steps a tour has, by name.
   ///
@@ -145,6 +154,32 @@ class TourScopeState extends State<TourScope> {
   /// Visual overrides for every step in this scope.
   HintThemeData? get theme => widget.theme;
 
+  /// The words on this scope's step cards.
+  TourLabels get labels => widget.labels;
+
+  /// Where the spotlight hole was on the step that just finished.
+  ///
+  /// Steps render through their own [HintTarget]s, so the incoming step cannot
+  /// ask the outgoing one where the light was — the scope is the only thing
+  /// both of them can see. Null before the first step of a tour, which is
+  /// exactly when there is nothing to travel from.
+  Rect? _lastSpotlight;
+
+  /// The hole the next step should travel from, or null to appear in place.
+  Rect? get lastSpotlight => _lastSpotlight;
+
+  /// Records where a step's spotlight is, for the step after it.
+  ///
+  /// Called every time the hole moves, so a step whose target scrolled is
+  /// handed off from where it actually ended up.
+  void reportSpotlight(Rect rect) => _lastSpotlight = rect;
+
+  /// Forgets the last spotlight, so the next step does not travel.
+  ///
+  /// Called when a tour ends: the first step of the next tour should light up
+  /// where it is, not fly in from wherever the last one finished.
+  void clearSpotlight() => _lastSpotlight = null;
+
   @override
   void initState() {
     super.initState();
@@ -182,6 +217,9 @@ class TourScopeState extends State<TourScope> {
   }
 
   void _onTourChanged() {
+    if (!_controller.isRunning) {
+      clearSpotlight();
+    }
     // Every mounted target re-evaluates whether it is the active step.
     for (final Map<int, VoidCallback> targets in _mounted.values) {
       for (final VoidCallback notify in List<VoidCallback>.of(targets.values)) {

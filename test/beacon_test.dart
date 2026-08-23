@@ -149,4 +149,76 @@ void main() {
   test('asserts without content', () {
     expect(Beacon.new, throwsA(isA<AssertionError>()));
   });
+
+  group('pulseCount', () {
+    testWidgets('stops after the given number of pulses',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(
+              child: Beacon(
+                pulseCount: 2,
+                message: 'Look here',
+                child: SizedBox(width: 40, height: 40),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Two pulses at the default 1200ms period, then nothing scheduled: a
+      // beacon that has settled lets pumpAndSettle return, which is the whole
+      // point of a finite count.
+      await tester.pump(const Duration(milliseconds: 2500));
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(find.byType(Beacon), findsOneWidget);
+    });
+
+    testWidgets('pulses forever without one', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(
+              child: Beacon(
+                message: 'Look here',
+                child: SizedBox(width: 40, height: 40),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 5000));
+      expect(tester.binding.hasScheduledFrame, isTrue);
+      // Leave nothing running behind us.
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a settled beacon still opens its hint',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(
+              child: Beacon(
+                pulseCount: 1,
+                message: 'Look here',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 1500));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Beacon));
+      await tester.pumpAndSettle();
+      expect(find.text('Look here'), findsOneWidget);
+    });
+  });
 }

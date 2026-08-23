@@ -49,6 +49,87 @@ placement resolver and one theme. No runtime dependencies.
 - `HintThemeData`, a `ThemeExtension` that themes all three features together,
   with per-field resolution and `ColorScheme`-derived defaults that look right
   in light and dark without configuration.
+- `HintPreset` — nine ready-made designs (`material`, `minimal`, `soft`,
+  `contrast`, `branded`, `sharp`, `card`, `cupertino`, `adaptive`) set with
+  `HintThemeData(preset: ...)`, app-wide or per hint. A preset is a layer, not
+  a mode: it sits between your explicit fields and the `ColorScheme` defaults,
+  so any field you also set still wins and anything the preset leaves open
+  still adapts to the ambient theme. `HintPreset.themeData(context)` hands the
+  design back as plain data for a custom design built from one. `adaptive`
+  resolves through `ThemeData.platform`, so it is testable and honours a
+  platform override.
+- `HintTransition` — five show/hide animations (`scale`, `fade`, `pop`,
+  `slide`, `none`), carried by the presets and settable on their own, plus
+  `HintThemeData.transitionBuilder` for an animation of your own.
+  `HintTransitionInfo` supplies the curved animation, a clamped one for
+  opacity, the resolved side, an origin on the caret and a unit vector towards
+  the target, so a custom transition works on all four sides without asking
+  about placement.
+- `HintArrowShape.custom` with `HintThemeData.arrowBuilder` — draw the caret
+  yourself. `HintArrowGeometry` arrives resolved for the edge the bubble landed
+  on, and the path is unioned into the body, so a custom caret keeps the
+  continuous border and single shadow.
+- `TourLabels` on `TourScope` — every word on the default step card, and the
+  step counter as a callback rather than a format string, because word order is
+  not universal. Custom cards get the same labels through `TourStepInfo.labels`.
+- `Hint.showOnce` — show a hint the first time and never again, backed by
+  `HintRegistry.instance.storage` and reset with
+  `HintRegistry.resetShowOnce`. Blocks a `HintController` too, and an
+  `onAppear` hint waits for the flag rather than racing the first frame.
+- `HintObserver` and `HintEvent`, registered on `HintRegistry` — one app-wide
+  hook for every hint show and dismiss and the whole tour lifecycle, for
+  onboarding funnels. `Hint.analyticsId` gives an event a key that outlives its
+  text.
+- `CallbackTourStorage` — real persistence in two closures, with no subclass
+  and no dependency. The same instance can serve tours and show-once hints.
+- The spotlight now travels from the previous step's target to the next one
+  instead of cutting, over `HintThemeData.spotlightMoveDuration`. It animates a
+  fraction rather than a rect, so the destination stays live and a target that
+  scrolls mid-travel is still followed.
+
+- **Resumable tours.** `TourController.start(tour, resume: true)` picks up at the
+  step the user was left on, and `hasProgress` answers "start or continue?"
+  without starting anything. `TourStorage` gained `lastIndex`/`saveIndex` with
+  no-op defaults, so a storage written against the old interface still works —
+  it simply never resumes. Positions are cleared when a tour finishes or is
+  skipped, and kept when it is cancelled.
+- `HintQueue` — a sequence of hints without a tour: no scrim, no spotlight, no
+  step card. Each hint waits for the previous one to close, however it closes.
+- `HintTarget.beforeShow` — an awaited hook that lets a step open the drawer,
+  push the route or fetch the row it is about to point at. Nothing is drawn
+  until it completes, and it is abandoned if the tour moves on first.
+- `HintThemeData.backgroundBlur` and the `glass` preset — a translucent bubble
+  over a blurred background, clipped to the same fused silhouette as the fill,
+  with the shadow still falling outside it.
+- Desktop and web: `HintTrigger.secondaryTap` (right-click, read from the
+  pointer's buttons so it never competes with the child's own handler),
+  `Hint.mouseCursor`, and `Hint.followPointer` for a bubble that tracks the
+  cursor instead of the widget — still placed by the full resolver, so it flips
+  at a screen edge rather than sliding off it.
+- `Beacon.pulseCount` — pulse a few times and settle. Also removes the
+  "a running Beacon never lets `pumpAndSettle` settle" limitation.
+- `HintThemeData.followHighContrast` — adopt the `contrast` design whenever the
+  platform asks for high contrast, keeping every field you set explicitly.
+- `package:hint_kit/testing.dart` — `resetHintKit()` for the process-global
+  registry, plus `FakeTourStorage` and `RecordingHintObserver`. No dependency
+  on `flutter_test`.
+- CI on GitHub Actions (format, analyze, test, example test, publish dry-run)
+  and a GitHub Pages deploy of the example app, linked from the README.
+
+- `HintThemeData.scrimOpacity` — how dark a tour step gets, independent of the
+  scrim's colour. It replaces the alpha of whatever colour is in play (an
+  explicit `scrimColor`, a preset's, or the default), so a slider can be bound
+  to it without touching the hue; `0` removes the dim and keeps the spotlight.
+  The default dim is now heavier — 90% in light mode, 95% in dark, up from 70%
+  and 80% — because a scrim you can read the page through competes with the
+  step. Presets keep their own dims.
+
+### Fixed
+
+- `HintThemeData.transitionCurve` was themed, merged and lerped but never
+  applied to anything: every bubble animated linearly. It now drives the
+  transition, with opacity clamped so an overshooting curve bounces instead of
+  asserting.
 - Two caret silhouettes via `HintArrowShape`: the default `triangle`, and
   `curved`, a speech-balloon tail whose flanks leave the bubble edge parallel
   to it so there is no corner where the caret meets the body. Both fill the

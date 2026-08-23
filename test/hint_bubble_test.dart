@@ -537,4 +537,158 @@ void main() {
       );
     });
   });
+
+  group('a custom arrow', () {
+    /// A flat-topped caret: two shoulders and a blunt end, which no built-in
+    /// shape can produce.
+    Path blunt(HintArrowGeometry g) {
+      final Offset shoulderA = g.baseStart + (g.tip - g.baseCentre) * 0.6;
+      final Offset shoulderB = g.baseEnd + (g.tip - g.baseCentre) * 0.6;
+      return Path()
+        ..moveTo(g.baseStart.dx, g.baseStart.dy)
+        ..lineTo(shoulderA.dx, shoulderA.dy)
+        ..lineTo(shoulderB.dx, shoulderB.dy)
+        ..lineTo(g.baseEnd.dx, g.baseEnd.dy)
+        ..close();
+    }
+
+    test('is unioned into the body like the built-in shapes', () {
+      final Path custom = buildBubblePath(
+        rect: const Rect.fromLTWH(0, 0, 100, 50),
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        side: HintSide.top,
+        arrowFraction: 0.5,
+        arrowSize: const Size(20, 10),
+        arrowShape: HintArrowShape.custom,
+        arrowBuilder: blunt,
+      );
+      // One closed silhouette, body and caret together.
+      expect(custom.contains(const Offset(50, 25)), isTrue);
+      // The blunt caret stops at 60% of the depth, so it covers a point the
+      // triangle's taper would have missed and misses one past its end.
+      expect(custom.contains(const Offset(56, 55)), isTrue);
+      expect(custom.contains(const Offset(50, 59.5)), isFalse);
+    });
+
+    test('receives geometry resolved for the side', () {
+      final List<HintArrowGeometry> seen = <HintArrowGeometry>[];
+      for (final HintSide side in HintSide.values) {
+        buildBubblePath(
+          rect: const Rect.fromLTWH(0, 0, 100, 50),
+          borderRadius: BorderRadius.zero,
+          side: side,
+          arrowFraction: 0.5,
+          arrowSize: const Size(20, 10),
+          arrowShape: HintArrowShape.custom,
+          arrowBuilder: (HintArrowGeometry g) {
+            seen.add(g);
+            return Path()
+              ..moveTo(g.baseStart.dx, g.baseStart.dy)
+              ..lineTo(g.tip.dx, g.tip.dy)
+              ..lineTo(g.baseEnd.dx, g.baseEnd.dy)
+              ..close();
+          },
+        );
+      }
+      expect(seen.length, 4);
+      // The tip always points away from the bubble, towards the target.
+      expect(seen[0].tip.dy, greaterThan(50)); // top: caret below
+      expect(seen[1].tip.dy, lessThan(0)); // bottom: caret above
+      expect(seen[2].tip.dx, greaterThan(100)); // left: caret right
+      expect(seen[3].tip.dx, lessThan(0)); // right: caret left
+      // The base spans the full arrow width, whichever way "along" runs.
+      for (final HintArrowGeometry g in seen) {
+        expect((g.baseEnd - g.baseStart).distance, closeTo(20, 0.001));
+        expect(g.halfWidth, 10);
+        expect(g.size, const Size(20, 10));
+      }
+    });
+
+    test('falls back to a triangle when no builder is given', () {
+      // Release behaviour: the assert fires in debug, and the shape still
+      // draws rather than vanishing.
+      Path build() => buildBubblePath(
+            rect: const Rect.fromLTWH(0, 0, 100, 50),
+            borderRadius: BorderRadius.zero,
+            side: HintSide.top,
+            arrowFraction: 0.5,
+            arrowSize: const Size(20, 10),
+            arrowShape: HintArrowShape.custom,
+          );
+      expect(build, throwsAssertionError);
+    });
+
+    testWidgets('a themed builder reaches the painter',
+        (WidgetTester tester) async {
+      int calls = 0;
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: bubble(
+              side: HintSide.top,
+              theme: HintThemeData(
+                arrowShape: HintArrowShape.custom,
+                arrowSize: const Size(24, 12),
+                arrowBuilder: (HintArrowGeometry g) {
+                  calls++;
+                  return blunt(g);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(calls, greaterThan(0));
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/bubble_custom_arrow.png'),
+      );
+    });
+  });
+
+  group('preset goldens', () {
+    // Seven designs and no regression net would mean a wrong radius or arrow
+    // inset in one of them could ship unnoticed.
+    for (final HintPreset preset in HintPreset.values) {
+      testWidgets('${preset.name} looks right', (WidgetTester tester) async {
+        await tester.pumpWidget(
+          harness(
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: bubble(
+                side: HintSide.top,
+                title: 'Check in',
+                theme: HintThemeData(preset: preset),
+              ),
+            ),
+          ),
+        );
+        await expectLater(
+          find.byType(HintBubbleDecoration),
+          matchesGoldenFile('goldens/preset_${preset.name}.png'),
+        );
+      });
+    }
+
+    testWidgets('card in dark mode', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: bubble(
+              side: HintSide.top,
+              title: 'Check in',
+              theme: const HintThemeData(preset: HintPreset.card),
+            ),
+          ),
+          brightness: Brightness.dark,
+        ),
+      );
+      await expectLater(
+        find.byType(HintBubbleDecoration),
+        matchesGoldenFile('goldens/preset_card_dark.png'),
+      );
+    });
+  });
 }

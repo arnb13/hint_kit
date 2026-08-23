@@ -1,6 +1,8 @@
 /// @docImport 'hint.dart';
 library;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../core/hint_arrow.dart';
@@ -24,8 +26,11 @@ import '../theme/hint_theme.dart';
 /// from the ends of the edge that the caret does not collide with a corner;
 /// `resolvePlacement` does this using `HintThemeData.arrowInset`.
 ///
-/// [arrowShape] selects the caret silhouette. Both shapes occupy exactly the
-/// same [arrowSize] box, so switching between them never moves the bubble.
+/// [arrowShape] selects the caret silhouette, and [arrowBuilder] supplies one
+/// of your own when that shape is [HintArrowShape.custom]. Every built-in
+/// shape occupies exactly the same [arrowSize] box, so switching between them
+/// never moves the bubble; a custom caret is free to draw outside it, at the
+/// cost of that guarantee.
 Path buildBubblePath({
   required Rect rect,
   required BorderRadius borderRadius,
@@ -33,6 +38,7 @@ Path buildBubblePath({
   required double arrowFraction,
   required Size arrowSize,
   HintArrowShape arrowShape = HintArrowShape.triangle,
+  HintArrowBuilder? arrowBuilder,
 }) {
   assert(rect.isFinite, 'buildBubblePath: rect must be finite, got $rect.');
   assert(
@@ -85,14 +91,31 @@ Path buildBubblePath({
       tip = Offset(rect.left - depth, y);
   }
 
+  assert(
+    arrowShape != HintArrowShape.custom || arrowBuilder != null,
+    'HintArrowShape.custom needs a HintThemeData.arrowBuilder to draw it. '
+    'Falling back to a triangle.',
+  );
   final Path arrow = switch (arrowShape) {
-    HintArrowShape.triangle => _triangleArrow(
+    HintArrowShape.custom when arrowBuilder != null => arrowBuilder(
+        HintArrowGeometry(
+          baseCentre: baseCentre,
+          along: along,
+          tip: tip,
+          halfWidth: half,
+          side: side,
+          size: arrowSize,
+        ),
+      ),
+    HintArrowShape.curved => _curvedArrow(
         baseCentre: baseCentre,
         along: along,
         tip: tip,
         half: half,
       ),
-    HintArrowShape.curved => _curvedArrow(
+    // A custom shape with no builder lands here too, which is the documented
+    // fallback for the release build of the assert above.
+    HintArrowShape.triangle || HintArrowShape.custom => _triangleArrow(
         baseCentre: baseCentre,
         along: along,
         tip: tip,
@@ -226,23 +249,130 @@ class HintBubbleDecoration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
+    final double blur = theme.backgroundBlur;
+    final Widget painted = CustomPaint(
       painter: _BubblePainter(
         side: side,
         arrowFraction: arrowFraction,
         borderRadius: theme.borderRadius,
         arrowSize: theme.arrowSize,
         arrowShape: theme.arrowShape,
+        arrowBuilder: theme.arrowBuilder,
         backgroundColor: theme.backgroundColor,
         borderColor: theme.borderColor,
         borderWidth: theme.borderWidth,
-        elevation: theme.elevation,
+        // With a backdrop blur the shadow is painted outside the clip, by the
+        // pass below; painting it here too would double it.
+        elevation: blur > 0 ? 0 : theme.elevation,
         shadowColor: theme.shadowColor,
         textDirection: Directionality.of(context),
       ),
       child: Padding(padding: theme.padding, child: child),
     );
+    if (blur <= 0) {
+      return painted;
+    }
+
+    // Frosted glass: blur whatever is behind the bubble, clipped to the same
+    // fused silhouette the fill uses, so the caret is frosted too.
+    //
+    // The shadow has to be painted *outside* the clip — it lies beyond the
+    // path by definition, so a ClipPath would erase it.
+    final _BubbleClipper clipper = _BubbleClipper(
+      side: side,
+      arrowFraction: arrowFraction,
+      borderRadius: theme.borderRadius,
+      arrowSize: theme.arrowSize,
+      arrowShape: theme.arrowShape,
+      arrowBuilder: theme.arrowBuilder,
+    );
+    return CustomPaint(
+      painter: _ShadowPainter(
+        clipper: clipper,
+        elevation: theme.elevation,
+        shadowColor: theme.shadowColor,
+      ),
+      child: ClipPath(
+        clipper: clipper,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: painted,
+        ),
+      ),
+    );
   }
+}
+
+/// Clips to the fused body-and-arrow silhouette.
+///
+/// Shared by the backdrop filter and the shadow pass so the two cannot
+/// disagree about where the bubble's edge is.
+class _BubbleClipper extends CustomClipper<Path> {
+  const _BubbleClipper({
+    required this.side,
+    required this.arrowFraction,
+    required this.borderRadius,
+    required this.arrowSize,
+    required this.arrowShape,
+    required this.arrowBuilder,
+  });
+
+  final HintSide side;
+  final double arrowFraction;
+  final BorderRadius borderRadius;
+  final Size arrowSize;
+  final HintArrowShape arrowShape;
+  final HintArrowBuilder? arrowBuilder;
+
+  @override
+  Path getClip(Size size) => buildBubblePath(
+        rect: Offset.zero & size,
+        borderRadius: borderRadius,
+        side: side,
+        arrowFraction: arrowFraction,
+        arrowSize: arrowSize,
+        arrowShape: arrowShape,
+        arrowBuilder: arrowBuilder,
+      );
+
+  @override
+  bool shouldReclip(_BubbleClipper old) =>
+      old.side != side ||
+      old.arrowFraction != arrowFraction ||
+      old.borderRadius != borderRadius ||
+      old.arrowSize != arrowSize ||
+      old.arrowShape != arrowShape ||
+      old.arrowBuilder != arrowBuilder;
+}
+
+/// Paints only the drop shadow, for the blurred variant.
+class _ShadowPainter extends CustomPainter {
+  const _ShadowPainter({
+    required this.clipper,
+    required this.elevation,
+    required this.shadowColor,
+  });
+
+  final _BubbleClipper clipper;
+  final double elevation;
+  final Color shadowColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || elevation <= 0) {
+      return;
+    }
+    canvas.drawShadow(clipper.getClip(size), shadowColor, elevation, false);
+  }
+
+  @override
+  bool shouldRepaint(_ShadowPainter old) =>
+      old.elevation != elevation ||
+      old.shadowColor != shadowColor ||
+      clipper.shouldReclip(old.clipper);
+
+  @override
+  bool hitTest(Offset position) => false;
 }
 
 /// Paints the fused body-and-arrow path.
@@ -253,6 +383,7 @@ class _BubblePainter extends CustomPainter {
     required this.borderRadius,
     required this.arrowSize,
     required this.arrowShape,
+    required this.arrowBuilder,
     required this.backgroundColor,
     required this.borderColor,
     required this.borderWidth,
@@ -266,6 +397,7 @@ class _BubblePainter extends CustomPainter {
   final BorderRadius borderRadius;
   final Size arrowSize;
   final HintArrowShape arrowShape;
+  final HintArrowBuilder? arrowBuilder;
   final Color backgroundColor;
   final Color borderColor;
   final double borderWidth;
@@ -285,6 +417,7 @@ class _BubblePainter extends CustomPainter {
       arrowFraction: arrowFraction,
       arrowSize: arrowSize,
       arrowShape: arrowShape,
+      arrowBuilder: arrowBuilder,
     );
 
     if (elevation > 0) {
@@ -310,6 +443,7 @@ class _BubblePainter extends CustomPainter {
       old.borderRadius != borderRadius ||
       old.arrowSize != arrowSize ||
       old.arrowShape != arrowShape ||
+      old.arrowBuilder != arrowBuilder ||
       old.backgroundColor != backgroundColor ||
       old.borderColor != borderColor ||
       old.borderWidth != borderWidth ||

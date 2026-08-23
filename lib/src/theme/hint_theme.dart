@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/hint_arrow.dart';
+import '../core/hint_transition.dart';
+import 'hint_preset.dart';
 
 /// Visual configuration shared by tooltips, hints and tour step cards.
 ///
@@ -21,22 +23,33 @@ import '../core/hint_arrow.dart';
 /// )
 /// ```
 ///
+/// For a ready-made design, name a [HintPreset] and override only what you
+/// want to differ:
+///
+/// ```dart
+/// HintThemeData(preset: HintPreset.soft, maxWidth: 360)
+/// ```
+///
 /// Every field is nullable. A `null` field means "fall back", and the
 /// fallbacks are resolved in this order by [HintThemeData.resolve]:
 ///
 /// 1. the per-instance `theme` passed to a `Hint` or `HintTarget`,
 /// 2. the [HintThemeData] found on [ThemeData.extensions],
-/// 3. defaults derived from the ambient [ColorScheme] and [TextTheme], which
+/// 3. the [preset] named by whichever of those set one,
+/// 4. defaults derived from the ambient [ColorScheme] and [TextTheme], which
 ///    are designed to look correct in both light and dark mode without any
 ///    configuration at all.
 ///
 /// Because resolution is per-field, a per-instance override of a single colour
-/// keeps every other value from the app-wide theme.
+/// keeps every other value from the app-wide theme — and a single override on
+/// top of a [preset] keeps the rest of that design.
 @immutable
 class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
   /// Creates a hint theme. Every argument is optional; see the class docs for
   /// how unset values are resolved.
   const HintThemeData({
+    this.preset,
+    this.followHighContrast,
     this.backgroundColor,
     this.foregroundColor,
     this.borderColor,
@@ -47,6 +60,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     this.padding,
     this.arrowSize,
     this.arrowShape,
+    this.arrowBuilder,
     this.arrowInset,
     this.gap,
     this.screenMargin,
@@ -56,11 +70,40 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     this.transitionDuration,
     this.reverseTransitionDuration,
     this.transitionCurve,
+    this.transition,
+    this.transitionBuilder,
     this.scrimColor,
+    this.scrimOpacity,
     this.scrimBlur,
+    this.backgroundBlur,
     this.spotlightBorderRadius,
     this.spotlightPadding,
+    this.spotlightMoveDuration,
   });
+
+  /// Switches to [HintPreset.contrast] when the platform asks for high
+  /// contrast.
+  ///
+  /// Reads [MediaQueryData.highContrast] — "Increase Contrast" on iOS and
+  /// macOS, the high-contrast themes on Windows — and swaps the design for the
+  /// legible one, keeping every field you set explicitly. Off by default,
+  /// because it overrides a [preset] you may have chosen deliberately.
+  ///
+  /// ```dart
+  /// HintThemeData(preset: HintPreset.soft, followHighContrast: true)
+  /// ```
+  final bool? followHighContrast;
+
+  /// A ready-made design to use for every field this theme leaves unset.
+  ///
+  /// The preset sits between the explicit fields and the
+  /// [ColorScheme]-derived defaults, so setting one is never destructive:
+  /// anything you also set here wins, and anything the preset leaves open
+  /// still falls through to the ambient theme.
+  ///
+  /// When both an app-wide [HintThemeData] and a per-instance one name a
+  /// preset, the per-instance one wins outright — presets do not blend.
+  final HintPreset? preset;
 
   /// Fill colour of the bubble, arrow included.
   final Color? backgroundColor;
@@ -98,9 +141,28 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
 
   /// The caret's silhouette. Defaults to [HintArrowShape.triangle].
   ///
-  /// Both shapes fill the same [arrowSize] box, so switching between them
-  /// changes only the outline — never the bubble's position.
+  /// The built-in shapes fill the same [arrowSize] box, so switching between
+  /// them changes only the outline — never the bubble's position.
   final HintArrowShape? arrowShape;
+
+  /// Draws a caret of your own, for [HintArrowShape.custom].
+  ///
+  /// Ignored by every other shape. The path is unioned into the bubble body,
+  /// so a custom caret keeps the continuous border and single shadow that the
+  /// built-in ones have:
+  ///
+  /// ```dart
+  /// HintThemeData(
+  ///   arrowShape: HintArrowShape.custom,
+  ///   arrowBuilder: (HintArrowGeometry g) => Path()
+  ///     ..moveTo(g.baseStart.dx, g.baseStart.dy)
+  ///     ..quadraticBezierTo(
+  ///       g.baseCentre.dx, g.baseCentre.dy, g.tip.dx, g.tip.dy)
+  ///     ..lineTo(g.baseEnd.dx, g.baseEnd.dy)
+  ///     ..close(),
+  /// )
+  /// ```
+  final HintArrowBuilder? arrowBuilder;
 
   /// Minimum distance between the arrow's centre and either end of the edge it
   /// sits on.
@@ -137,10 +199,56 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
   final Duration? reverseTransitionDuration;
 
   /// Curve of the show and hide animation.
+  ///
+  /// Applied to the animation every transition is driven by, so an
+  /// overshooting curve such as [Curves.easeOutBack] gives any of them a
+  /// bounce. Opacity is clamped, so the overshoot shows up as movement rather
+  /// than as an assertion.
   final Curve? transitionCurve;
 
+  /// Which ready-made show/hide animation to use.
+  ///
+  /// Defaults to [HintTransition.scale]. Ignored when [transitionBuilder] is
+  /// set, which is the escape hatch for an animation of your own.
+  final HintTransition? transition;
+
+  /// Animates the bubble yourself, instead of using [transition].
+  ///
+  /// Wins over [transition] when both are set. See [HintTransitionBuilder] for
+  /// what the builder is handed and what it is expected to return.
+  final HintTransitionBuilder? transitionBuilder;
+
   /// Colour of the full-screen scrim painted behind a tour step.
+  ///
+  /// Its alpha is the dim, so a colour alone is enough to set both:
+  ///
+  /// ```dart
+  /// HintThemeData(scrimColor: Color(0xE6101828))   // a dark navy at 90%
+  /// ```
+  ///
+  /// Use [scrimOpacity] when you want to change *only* how dark the step gets
+  /// and leave the hue — the preset's, the default's — alone.
   final Color? scrimColor;
+
+  /// How opaque the scrim is, from `0` (invisible) to `1` (solid).
+  ///
+  /// Replaces the alpha of whatever colour is in play — [scrimColor], a
+  /// [preset]'s, or the default — so the two are independent settings:
+  ///
+  /// ```dart
+  /// // Darker, but still the default neutral black.
+  /// TourScope(
+  ///   theme: const HintThemeData(scrimOpacity: 0.95),
+  ///   child: const MyApp(),
+  /// )
+  ///
+  /// // A brand-tinted scrim at whatever opacity you like.
+  /// HintThemeData(scrimColor: const Color(0xFF1B2A4A), scrimOpacity: 0.8)
+  /// ```
+  ///
+  /// Values outside 0..1 are clamped. Null leaves the colour's own alpha
+  /// untouched.
+  final double? scrimOpacity;
 
   /// Gaussian blur sigma applied to the scrim.
   ///
@@ -148,17 +256,41 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
   /// [BackdropFilter].
   final double? scrimBlur;
 
+  /// Gaussian blur sigma applied to whatever is *behind* the bubble.
+  ///
+  /// `0` (the default) leaves the background alone. Anything above that
+  /// frosts the page under the bubble, clipped to the same fused silhouette as
+  /// the fill — so the caret is frosted too, and the drop shadow still falls
+  /// outside it.
+  ///
+  /// Only worth having with a translucent [backgroundColor]; over an opaque
+  /// fill there is nothing to see through. It costs a `saveLayer` per bubble,
+  /// which is why it is off by default. See [HintPreset.glass] for a design
+  /// built around it.
+  final double? backgroundBlur;
+
   /// Corner radius for `SpotlightShape.roundedRect` holes.
   final BorderRadius? spotlightBorderRadius;
 
   /// Padding added around the target rect when cutting the spotlight hole.
   final EdgeInsets? spotlightPadding;
 
+  /// How long the spotlight takes to travel from the previous step's target to
+  /// this one's.
+  ///
+  /// The hole morphs between the two rects rather than cutting, which is what
+  /// makes a tour read as one continuous thing. [Duration.zero] restores the
+  /// cut. Ignored for the first step of a tour — there is nothing to travel
+  /// from — and under [MediaQuery.disableAnimationsOf].
+  final Duration? spotlightMoveDuration;
+
   /// Resolves every field against [context], producing a theme whose getters
   /// are all non-null.
   ///
   /// [overrides] takes precedence over the ambient [ThemeData.extensions],
-  /// which in turn takes precedence over the [ColorScheme]-derived defaults.
+  /// which in turn takes precedence over the [preset] named by the merged
+  /// result, which in turn takes precedence over the [ColorScheme]-derived
+  /// defaults.
   static ResolvedHintTheme resolve(
     BuildContext context, [
     HintThemeData? overrides,
@@ -171,7 +303,17 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       (null, final HintThemeData o) => o,
       (final HintThemeData a, final HintThemeData o) => a.merge(o),
     };
-    return ResolvedHintTheme._(merged, theme);
+    // High contrast is a property of the platform, not of the theme, so it is
+    // read here — the one place resolution has a BuildContext — rather than
+    // inside the preset.
+    final bool highContrast = merged.followHighContrast ?? false
+        ? MediaQuery.maybeHighContrastOf(context) ?? false
+        : false;
+    return ResolvedHintTheme._(
+      merged,
+      theme,
+      presetOverride: highContrast ? HintPreset.contrast : null,
+    );
   }
 
   /// Returns a copy of this theme with every non-null field of [other]
@@ -181,6 +323,8 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       return this;
     }
     return copyWith(
+      preset: other.preset,
+      followHighContrast: other.followHighContrast,
       backgroundColor: other.backgroundColor,
       foregroundColor: other.foregroundColor,
       borderColor: other.borderColor,
@@ -191,6 +335,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       padding: other.padding,
       arrowSize: other.arrowSize,
       arrowShape: other.arrowShape,
+      arrowBuilder: other.arrowBuilder,
       arrowInset: other.arrowInset,
       gap: other.gap,
       screenMargin: other.screenMargin,
@@ -200,15 +345,22 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       transitionDuration: other.transitionDuration,
       reverseTransitionDuration: other.reverseTransitionDuration,
       transitionCurve: other.transitionCurve,
+      transition: other.transition,
+      transitionBuilder: other.transitionBuilder,
       scrimColor: other.scrimColor,
+      scrimOpacity: other.scrimOpacity,
       scrimBlur: other.scrimBlur,
+      backgroundBlur: other.backgroundBlur,
       spotlightBorderRadius: other.spotlightBorderRadius,
       spotlightPadding: other.spotlightPadding,
+      spotlightMoveDuration: other.spotlightMoveDuration,
     );
   }
 
   @override
   HintThemeData copyWith({
+    HintPreset? preset,
+    bool? followHighContrast,
     Color? backgroundColor,
     Color? foregroundColor,
     Color? borderColor,
@@ -219,6 +371,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     EdgeInsets? padding,
     Size? arrowSize,
     HintArrowShape? arrowShape,
+    HintArrowBuilder? arrowBuilder,
     double? arrowInset,
     double? gap,
     EdgeInsets? screenMargin,
@@ -228,12 +381,19 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     Duration? transitionDuration,
     Duration? reverseTransitionDuration,
     Curve? transitionCurve,
+    HintTransition? transition,
+    HintTransitionBuilder? transitionBuilder,
     Color? scrimColor,
+    double? scrimOpacity,
     double? scrimBlur,
+    double? backgroundBlur,
     BorderRadius? spotlightBorderRadius,
     EdgeInsets? spotlightPadding,
+    Duration? spotlightMoveDuration,
   }) {
     return HintThemeData(
+      preset: preset ?? this.preset,
+      followHighContrast: followHighContrast ?? this.followHighContrast,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       foregroundColor: foregroundColor ?? this.foregroundColor,
       borderColor: borderColor ?? this.borderColor,
@@ -244,6 +404,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       padding: padding ?? this.padding,
       arrowSize: arrowSize ?? this.arrowSize,
       arrowShape: arrowShape ?? this.arrowShape,
+      arrowBuilder: arrowBuilder ?? this.arrowBuilder,
       arrowInset: arrowInset ?? this.arrowInset,
       gap: gap ?? this.gap,
       screenMargin: screenMargin ?? this.screenMargin,
@@ -254,11 +415,17 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       reverseTransitionDuration:
           reverseTransitionDuration ?? this.reverseTransitionDuration,
       transitionCurve: transitionCurve ?? this.transitionCurve,
+      transition: transition ?? this.transition,
+      transitionBuilder: transitionBuilder ?? this.transitionBuilder,
       scrimColor: scrimColor ?? this.scrimColor,
+      scrimOpacity: scrimOpacity ?? this.scrimOpacity,
       scrimBlur: scrimBlur ?? this.scrimBlur,
+      backgroundBlur: backgroundBlur ?? this.backgroundBlur,
       spotlightBorderRadius:
           spotlightBorderRadius ?? this.spotlightBorderRadius,
       spotlightPadding: spotlightPadding ?? this.spotlightPadding,
+      spotlightMoveDuration:
+          spotlightMoveDuration ?? this.spotlightMoveDuration,
     );
   }
 
@@ -268,6 +435,11 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       return this;
     }
     return HintThemeData(
+      // A preset is a name, not a value: like curves and durations below, it
+      // snaps at the halfway point rather than interpolating.
+      preset: t < 0.5 ? preset : other.preset,
+      followHighContrast:
+          t < 0.5 ? followHighContrast : other.followHighContrast,
       backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t),
       foregroundColor: Color.lerp(foregroundColor, other.foregroundColor, t),
       borderColor: Color.lerp(borderColor, other.borderColor, t),
@@ -278,6 +450,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       padding: EdgeInsets.lerp(padding, other.padding, t),
       arrowSize: Size.lerp(arrowSize, other.arrowSize, t),
       arrowShape: t < 0.5 ? arrowShape : other.arrowShape,
+      arrowBuilder: t < 0.5 ? arrowBuilder : other.arrowBuilder,
       arrowInset: _lerpDouble(arrowInset, other.arrowInset, t),
       gap: _lerpDouble(gap, other.gap, t),
       screenMargin: EdgeInsets.lerp(screenMargin, other.screenMargin, t),
@@ -291,8 +464,12 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       reverseTransitionDuration:
           t < 0.5 ? reverseTransitionDuration : other.reverseTransitionDuration,
       transitionCurve: t < 0.5 ? transitionCurve : other.transitionCurve,
+      transition: t < 0.5 ? transition : other.transition,
+      transitionBuilder: t < 0.5 ? transitionBuilder : other.transitionBuilder,
       scrimColor: Color.lerp(scrimColor, other.scrimColor, t),
+      scrimOpacity: _lerpDouble(scrimOpacity, other.scrimOpacity, t),
       scrimBlur: _lerpDouble(scrimBlur, other.scrimBlur, t),
+      backgroundBlur: _lerpDouble(backgroundBlur, other.backgroundBlur, t),
       spotlightBorderRadius: BorderRadius.lerp(
         spotlightBorderRadius,
         other.spotlightBorderRadius,
@@ -303,6 +480,8 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         other.spotlightPadding,
         t,
       ),
+      spotlightMoveDuration:
+          t < 0.5 ? spotlightMoveDuration : other.spotlightMoveDuration,
     );
   }
 
@@ -312,6 +491,8 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
       return true;
     }
     return other is HintThemeData &&
+        other.preset == preset &&
+        other.followHighContrast == followHighContrast &&
         other.backgroundColor == backgroundColor &&
         other.foregroundColor == foregroundColor &&
         other.borderColor == borderColor &&
@@ -322,6 +503,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         other.padding == padding &&
         other.arrowSize == arrowSize &&
         other.arrowShape == arrowShape &&
+        other.arrowBuilder == arrowBuilder &&
         other.arrowInset == arrowInset &&
         other.gap == gap &&
         other.screenMargin == screenMargin &&
@@ -331,14 +513,21 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         other.transitionDuration == transitionDuration &&
         other.reverseTransitionDuration == reverseTransitionDuration &&
         other.transitionCurve == transitionCurve &&
+        other.transition == transition &&
+        other.transitionBuilder == transitionBuilder &&
         other.scrimColor == scrimColor &&
+        other.scrimOpacity == scrimOpacity &&
         other.scrimBlur == scrimBlur &&
+        other.backgroundBlur == backgroundBlur &&
         other.spotlightBorderRadius == spotlightBorderRadius &&
-        other.spotlightPadding == spotlightPadding;
+        other.spotlightPadding == spotlightPadding &&
+        other.spotlightMoveDuration == spotlightMoveDuration;
   }
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
+        preset,
+        followHighContrast,
         backgroundColor,
         foregroundColor,
         borderColor,
@@ -349,6 +538,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         padding,
         arrowSize,
         arrowShape,
+        arrowBuilder,
         arrowInset,
         gap,
         screenMargin,
@@ -358,10 +548,15 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
         transitionDuration,
         reverseTransitionDuration,
         transitionCurve,
+        transition,
+        transitionBuilder,
         scrimColor,
+        scrimOpacity,
         scrimBlur,
+        backgroundBlur,
         spotlightBorderRadius,
         spotlightPadding,
+        spotlightMoveDuration,
       ]);
 
   @override
@@ -369,6 +564,7 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
     super.debugFillProperties(properties);
     const Object? none = null;
     properties
+      ..add(EnumProperty<HintPreset>('preset', preset, defaultValue: none))
       ..add(ColorProperty('backgroundColor', backgroundColor))
       ..add(ColorProperty('foregroundColor', foregroundColor))
       ..add(ColorProperty('borderColor', borderColor))
@@ -394,10 +590,33 @@ class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
           defaultValue: none,
         ),
       )
+      ..add(
+        EnumProperty<HintTransition>(
+          'transition',
+          transition,
+          defaultValue: none,
+        ),
+      )
+      ..add(
+        FlagProperty(
+          'transitionBuilder',
+          value: transitionBuilder != null,
+          ifTrue: 'custom transition',
+        ),
+      )
+      ..add(
+        FlagProperty(
+          'arrowBuilder',
+          value: arrowBuilder != null,
+          ifTrue: 'custom arrow',
+        ),
+      )
       ..add(DoubleProperty('gap', gap))
       ..add(DoubleProperty('maxWidth', maxWidth))
       ..add(ColorProperty('scrimColor', scrimColor))
-      ..add(DoubleProperty('scrimBlur', scrimBlur));
+      ..add(DoubleProperty('scrimOpacity', scrimOpacity))
+      ..add(DoubleProperty('scrimBlur', scrimBlur))
+      ..add(DoubleProperty('backgroundBlur', backgroundBlur));
   }
 }
 
@@ -416,9 +635,39 @@ double? _lerpDouble(double? a, double? b, double t) {
 /// logic, and so the defaults live in exactly one place.
 @immutable
 class ResolvedHintTheme {
-  ResolvedHintTheme._(this._data, this._theme)
-      : _colors = _theme.colorScheme,
+  ResolvedHintTheme._(
+    HintThemeData data,
+    this._theme, {
+    HintPreset? presetOverride,
+  })  : _presetOverride = presetOverride,
+        _data = _applyPreset(data, _theme, presetOverride),
+        _colors = _theme.colorScheme,
         _text = _theme.textTheme;
+
+  /// A preset that wins over [HintThemeData.preset] for this resolution only.
+  ///
+  /// Set when [HintThemeData.followHighContrast] fires. Carried through
+  /// [withoutArrow] so a derived theme cannot quietly drop it.
+  final HintPreset? _presetOverride;
+
+  /// Fills [data]'s unset fields from its [HintThemeData.preset], if it names
+  /// one.
+  ///
+  /// Explicit fields win, so this only ever adds values. It is applied here
+  /// rather than in [HintThemeData.resolve] so that every [ResolvedHintTheme]
+  /// — including the one [withoutArrow] derives — carries the preset's values
+  /// already baked in. Running it twice is a no-op for that reason.
+  static HintThemeData _applyPreset(
+    HintThemeData data,
+    ThemeData theme,
+    HintPreset? override,
+  ) {
+    final HintPreset? preset = override ?? data.preset;
+    if (preset == null) {
+      return data;
+    }
+    return hintPresetData(preset, theme).merge(data);
+  }
 
   final HintThemeData _data;
   final ThemeData _theme;
@@ -463,6 +712,9 @@ class ResolvedHintTheme {
 
   /// See [HintThemeData.arrowShape].
   HintArrowShape get arrowShape => _data.arrowShape ?? HintArrowShape.triangle;
+
+  /// See [HintThemeData.arrowBuilder].
+  HintArrowBuilder? get arrowBuilder => _data.arrowBuilder;
 
   /// See [HintThemeData.arrowInset].
   ///
@@ -521,13 +773,59 @@ class ResolvedHintTheme {
   /// See [HintThemeData.transitionCurve].
   Curve get transitionCurve => _data.transitionCurve ?? Curves.easeOutCubic;
 
-  /// See [HintThemeData.scrimColor].
-  Color get scrimColor =>
-      _data.scrimColor ??
-      (isDark ? const Color(0xCC000000) : const Color(0xB3000000));
+  /// See [HintThemeData.transition].
+  HintTransition get transition => _data.transition ?? HintTransition.scale;
+
+  /// See [HintThemeData.transitionBuilder].
+  HintTransitionBuilder? get transitionBuilder => _data.transitionBuilder;
+
+  /// Applies [transitionBuilder], or [transition] when there is none.
+  ///
+  /// Every bubble animates through here, so a custom builder and a preset
+  /// transition cannot diverge in how they are driven.
+  Widget buildTransition(
+    BuildContext context,
+    HintTransitionInfo info,
+    Widget child,
+  ) {
+    final HintTransitionBuilder? builder = transitionBuilder;
+    if (builder != null) {
+      return builder(context, info, child);
+    }
+    return transition.build(context, info, child);
+  }
+
+  /// See [HintThemeData.scrimColor], with [HintThemeData.scrimOpacity]
+  /// applied.
+  ///
+  /// The default dim is deliberately heavy: a tour step is modal, and a scrim
+  /// light enough to read the page through it invites the user to keep
+  /// reading the page instead of the step.
+  Color get scrimColor {
+    final Color base = _data.scrimColor ??
+        (isDark ? const Color(0xF2000000) : const Color(0xE6000000));
+    final double? opacity = _data.scrimOpacity;
+    if (opacity == null) {
+      return base;
+    }
+    return base.withAlpha((opacity.clamp(0.0, 1.0) * 255).round());
+  }
+
+  /// The scrim's opacity as a fraction, whether it came from
+  /// [HintThemeData.scrimOpacity] or from the alpha of a colour.
+  ///
+  /// Reading it back is what a "how dark is the tour?" control binds to.
+  ///
+  /// `Color.a` supersedes `.alpha`, but only from Flutter 3.27; the package
+  /// supports 3.24, so the deprecated accessor stays until the floor moves.
+  // ignore: deprecated_member_use
+  double get scrimOpacity => scrimColor.alpha / 255;
 
   /// See [HintThemeData.scrimBlur].
   double get scrimBlur => _data.scrimBlur ?? 0;
+
+  /// See [HintThemeData.backgroundBlur].
+  double get backgroundBlur => _data.backgroundBlur ?? 0;
 
   /// See [HintThemeData.spotlightBorderRadius].
   BorderRadius get spotlightBorderRadius =>
@@ -537,13 +835,20 @@ class ResolvedHintTheme {
   EdgeInsets get spotlightPadding =>
       _data.spotlightPadding ?? const EdgeInsets.all(8);
 
+  /// See [HintThemeData.spotlightMoveDuration].
+  Duration get spotlightMoveDuration =>
+      _data.spotlightMoveDuration ?? const Duration(milliseconds: 320);
+
   /// A copy of this theme with no arrow.
   ///
   /// Used for bubbles that are not visually anchored to an edge, such as a
   /// tour step card. It keeps every other value, so a card and a tooltip in
   /// the same app cannot drift apart.
-  ResolvedHintTheme withoutArrow() =>
-      ResolvedHintTheme._(_data.copyWith(arrowSize: Size.zero), _theme);
+  ResolvedHintTheme withoutArrow() => ResolvedHintTheme._(
+        _data.copyWith(arrowSize: Size.zero),
+        _theme,
+        presetOverride: _presetOverride,
+      );
 
   @override
   bool operator ==(Object other) =>

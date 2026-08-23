@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../core/hint_side.dart';
@@ -49,6 +51,7 @@ class Beacon extends StatefulWidget {
     this.alignment = Alignment.topRight,
     this.period = const Duration(milliseconds: 1800),
     this.autoStart = true,
+    this.pulseCount,
     this.direction = HintDirection.auto,
     this.theme,
     this.interactive = false,
@@ -95,6 +98,16 @@ class Beacon extends StatefulWidget {
   /// beacons would be a distraction rather than a hint.
   final bool autoStart;
 
+  /// How many times to pulse before settling into a static dot.
+  ///
+  /// Null — the default — pulses forever. A finite count is usually the
+  /// better UX: it catches the eye when the screen appears and then stops
+  /// competing with everything else on it.
+  ///
+  /// It also makes the beacon testable: a forever-pulsing beacon always has a
+  /// frame scheduled, so `pumpAndSettle` never returns while one is on screen.
+  final int? pulseCount;
+
   /// Which side the hint prefers.
   final HintDirection direction;
 
@@ -124,6 +137,9 @@ class _BeaconState extends State<Beacon> with SingleTickerProviderStateMixin {
   );
   final HintController _hint = HintController();
 
+  /// Pulses still to run, or null for "forever".
+  int? _pulsesLeft;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -148,13 +164,39 @@ class _BeaconState extends State<Beacon> with SingleTickerProviderStateMixin {
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     if (widget.autoStart && !reduceMotion) {
       if (!_pulse.isAnimating) {
-        _pulse.repeat();
+        _pulsesLeft = widget.pulseCount;
+        _runPulse();
       }
     } else {
+      _pulsesLeft = null;
       _pulse
         ..stop()
         ..value = 0;
     }
+  }
+
+  /// Runs one pulse, or repeats forever when there is no count.
+  ///
+  /// A counted pulse is driven one cycle at a time rather than with
+  /// `repeat(count:)`, which needs a newer Flutter than this package's floor.
+  void _runPulse() {
+    final int? left = _pulsesLeft;
+    if (left == null) {
+      unawaited(_pulse.repeat());
+      return;
+    }
+    if (left <= 0) {
+      _pulse.value = 0;
+      return;
+    }
+    _pulsesLeft = left - 1;
+    unawaited(
+      _pulse.forward(from: 0).then((_) {
+        if (mounted) {
+          _runPulse();
+        }
+      }),
+    );
   }
 
   @override

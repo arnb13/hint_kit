@@ -1,7 +1,13 @@
 /// @docImport 'package:flutter/widgets.dart';
+/// @docImport '../tour/tour_scope.dart';
+/// @docImport 'hint.dart';
 library;
 
 import 'package:flutter/foundation.dart';
+
+import '../core/hint_observer.dart';
+import '../core/tour_end_reason.dart';
+import '../tour/tour_storage.dart';
 
 /// Something that can be asked to close itself.
 ///
@@ -63,5 +69,100 @@ class HintRegistry {
     final DismissibleHint? previous = _current;
     _current = null;
     previous?.dismissForExclusivity();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Show-once storage
+  // ---------------------------------------------------------------------------
+
+  /// Where [Hint.showOnce] keys are remembered.
+  ///
+  /// Defaults to an [InMemoryTourStorage], so a "seen it" hint comes back on
+  /// the next launch until you point this at real persistence — once, at
+  /// startup:
+  ///
+  /// ```dart
+  /// void main() {
+  ///   HintRegistry.instance.storage = CallbackTourStorage(
+  ///     isCompleted: (String key) async => prefs.getBool(key) ?? false,
+  ///     setCompleted: (String key, bool seen) async =>
+  ///         seen ? prefs.setBool(key, true) : prefs.remove(key),
+  ///   );
+  ///   runApp(const MyApp());
+  /// }
+  /// ```
+  ///
+  /// It is the same interface tours use, and the same instance can serve both
+  /// — pass it to [TourScope.storage] as well. Keys are whatever string a hint
+  /// was given, so keep hint keys and tour names distinct.
+  TourStorage storage = InMemoryTourStorage();
+
+  /// Forgets the "already shown" flag for a [Hint.showOnce] key, so that hint
+  /// appears again.
+  ///
+  /// The counterpart to a "replay the tour" button, and the reset a test needs
+  /// between cases.
+  Future<void> resetShowOnce(String key) => storage.reset(key);
+
+  // ---------------------------------------------------------------------------
+  // Observers
+  // ---------------------------------------------------------------------------
+
+  final List<HintObserver> _observers = <HintObserver>[];
+
+  /// Starts reporting hint and tour lifecycle events to [observer].
+  ///
+  /// Adding the same observer twice makes it hear everything twice; the
+  /// registry does not deduplicate, so that two identical const observers are
+  /// still two subscriptions.
+  void addObserver(HintObserver observer) => _observers.add(observer);
+
+  /// Stops reporting to [observer]. Unknown observers are ignored.
+  void removeObserver(HintObserver observer) => _observers.remove(observer);
+
+  /// Drops every observer.
+  ///
+  /// For tests: the registry outlives a widget tree, so an observer registered
+  /// in one test is still listening in the next. `resetHintKit()` from
+  /// `package:hint_kit/testing.dart` calls this.
+  void removeAllObservers() => _observers.clear();
+
+  /// Reports that a hint opened. Called by `Hint`, not by app code.
+  void notifyShown(HintEvent event) => _each((HintObserver o) {
+        o.didShowHint(event);
+      });
+
+  /// Reports that a hint closed. Called by `Hint`, not by app code.
+  void notifyDismissed(HintEvent event) => _each((HintObserver o) {
+        o.didDismissHint(event);
+      });
+
+  /// Reports that a tour started. Called by `TourController`.
+  void notifyTourStarted(String tour) => _each((HintObserver o) {
+        o.didStartTour(tour);
+      });
+
+  /// Reports that a tour reached a step. Called by `TourController`.
+  void notifyTourStep(String tour, int index) => _each((HintObserver o) {
+        o.didChangeTourStep(tour, index);
+      });
+
+  /// Reports that a tour ended. Called by `TourController`.
+  void notifyTourEnded(String tour, TourEndReason reason) =>
+      _each((HintObserver o) {
+        o.didEndTour(tour, reason);
+      });
+
+  /// Visits every observer over a copy of the list.
+  ///
+  /// An observer that adds or removes one from its callback is legal — and
+  /// would otherwise throw a concurrent-modification error.
+  void _each(void Function(HintObserver observer) visit) {
+    if (_observers.isEmpty) {
+      return;
+    }
+    for (final HintObserver observer in List<HintObserver>.of(_observers)) {
+      visit(observer);
+    }
   }
 }

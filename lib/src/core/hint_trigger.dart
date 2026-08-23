@@ -32,6 +32,14 @@ enum HintTrigger {
   /// This is the platform-conventional tooltip trigger on touch devices.
   longPress,
 
+  /// Show on a right-click, hide on the next one.
+  ///
+  /// The desktop conventional gesture for "tell me about this thing" when the
+  /// primary click already does something. Recognised from the pointer's
+  /// buttons, so it never competes with a child's own secondary-tap handler,
+  /// and a primary click does not open it.
+  secondaryTap,
+
   /// Show while the pointer is over the target.
   ///
   /// Respects `waitDuration` before showing. When the hint is `interactive`,

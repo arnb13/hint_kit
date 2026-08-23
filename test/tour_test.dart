@@ -24,6 +24,25 @@ class RecordingStorage implements TourStorage {
   Future<void> reset(String tour) async {
     calls.add('reset:$tour');
     completed.remove(tour);
+    indices.remove(tour);
+  }
+
+  final Map<String, int> indices = <String, int>{};
+
+  @override
+  Future<int?> lastIndex(String tour) async {
+    calls.add('lastIndex:$tour');
+    return indices[tour];
+  }
+
+  @override
+  Future<void> saveIndex(String tour, int? index) async {
+    calls.add('saveIndex:$tour:$index');
+    if (index == null) {
+      indices.remove(tour);
+    } else {
+      indices[tour] = index;
+    }
   }
 }
 

@@ -18,25 +18,34 @@
 /// @docImport 'src/tour/tour_scope.dart';
 library;
 
-export 'src/core/hint_arrow.dart' show HintArrowShape;
+export 'src/core/hint_arrow.dart'
+    show HintArrowBuilder, HintArrowGeometry, HintArrowShape;
+export 'src/core/hint_observer.dart' show HintEvent, HintObserver;
 export 'src/core/hint_side.dart' show HintDirection, HintSide;
+export 'src/core/hint_transition.dart'
+    show HintTransition, HintTransitionBuilder, HintTransitionInfo;
 export 'src/core/hint_trigger.dart' show HintTrigger;
 export 'src/core/measure_size.dart' show MeasureSize, SizeChangedCallback;
 export 'src/core/placement.dart' show HintPlacement, resolvePlacement;
 export 'src/core/rect_tracker.dart' show HintRectTracker, RectTrackingMode;
+export 'src/core/tour_end_reason.dart' show TourEndReason;
+export 'src/theme/hint_preset.dart' show HintPreset;
 export 'src/theme/hint_theme.dart' show HintThemeData, ResolvedHintTheme;
 export 'src/tooltip/anchored_bubble.dart' show AnchoredHintBubble;
 export 'src/tooltip/hint.dart' show Hint, HintContentBuilder;
 export 'src/tooltip/hint_bubble.dart'
     show HintBubbleContent, HintBubbleDecoration, buildBubblePath;
 export 'src/tooltip/hint_controller.dart' show HintController;
+export 'src/tooltip/hint_queue.dart' show HintQueue;
 export 'src/tooltip/hint_registry.dart' show HintRegistry;
 export 'src/tour/hint_target.dart'
     show HintTarget, TourStepBuilder, TourStepCard, TourStepInfo;
 export 'src/tour/spotlight.dart'
     show RenderSpotlightBlocker, Spotlight, SpotlightShape;
 export 'src/tour/tour_controller.dart'
-    show TourController, TourEndCallback, TourEndReason, TourStepCallback;
+    show TourController, TourEndCallback, TourStepCallback;
+export 'src/tour/tour_labels.dart' show TourLabels, TourProgressBuilder;
 export 'src/tour/tour_scope.dart' show Tour, TourScope, TourScopeState;
-export 'src/tour/tour_storage.dart' show InMemoryTourStorage, TourStorage;
+export 'src/tour/tour_storage.dart'
+    show CallbackTourStorage, InMemoryTourStorage, TourStorage;
 export 'src/widgets/beacon.dart' show Beacon;
