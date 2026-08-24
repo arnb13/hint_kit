@@ -27,6 +27,8 @@ import 'hint_side.dart';
 ///   },
 /// )
 /// ```
+///
+/// {@category Theming}
 typedef HintTransitionBuilder = Widget Function(
   BuildContext context,
   HintTransitionInfo info,
@@ -34,6 +36,8 @@ typedef HintTransitionBuilder = Widget Function(
 );
 
 /// Everything a [HintTransitionBuilder] needs to animate a bubble.
+///
+/// {@category Theming}
 @immutable
 class HintTransitionInfo {
   /// Creates the info handed to a transition builder.
@@ -106,6 +110,8 @@ class HintTransitionInfo {
 /// [HintThemeData.reverseTransitionDuration] all still apply — and all of them
 /// collapse to an instant appearance under
 /// [MediaQueryData.disableAnimations].
+///
+/// {@category Theming}
 enum HintTransition {
   /// Fade and a small scale out of the caret. The default.
   ///

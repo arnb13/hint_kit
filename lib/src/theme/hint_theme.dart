@@ -43,6 +43,8 @@ import 'hint_preset.dart';
 /// Because resolution is per-field, a per-instance override of a single colour
 /// keeps every other value from the app-wide theme — and a single override on
 /// top of a [preset] keeps the rest of that design.
+///
+/// {@category Theming}
 @immutable
 class HintThemeData extends ThemeExtension<HintThemeData> with Diagnosticable {
   /// Creates a hint theme. Every argument is optional; see the class docs for
@@ -633,6 +635,8 @@ double? _lerpDouble(double? a, double? b, double t) {
 /// Obtain one with [HintThemeData.resolve]. Widgets in this package read from
 /// this rather than from [HintThemeData] so they never have to repeat fallback
 /// logic, and so the defaults live in exactly one place.
+///
+/// {@category Theming}
 @immutable
 class ResolvedHintTheme {
   ResolvedHintTheme._(

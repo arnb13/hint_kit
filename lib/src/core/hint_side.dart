@@ -5,6 +5,8 @@ library;
 ///
 /// This is the *requested* direction. Use [HintSide] for the side the
 /// placement resolver actually settled on.
+///
+/// {@category Hints}
 enum HintDirection {
   /// Place the bubble above the target.
   top,
@@ -31,6 +33,8 @@ enum HintDirection {
 ///
 /// Unlike [HintDirection] this is always a concrete, visual side: text
 /// direction has already been applied and `auto` has already been decided.
+///
+/// {@category Advanced}
 enum HintSide {
   /// The bubble sits above the target; its arrow points down.
   top,

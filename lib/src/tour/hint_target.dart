@@ -16,12 +16,16 @@ import 'tour_labels.dart';
 import 'tour_scope.dart';
 
 /// Signature for building a custom tour step card.
+///
+/// {@category Tours}
 typedef TourStepBuilder = Widget Function(
   BuildContext context,
   TourStepInfo info,
 );
 
 /// Everything a custom step card needs to render itself and drive the tour.
+///
+/// {@category Tours}
 class TourStepInfo {
   /// Creates the info handed to a [TourStepBuilder].
   const TourStepInfo({
@@ -97,6 +101,8 @@ class TourStepInfo {
 ///
 /// The step card is the same bubble a [Hint] uses, placed by the same
 /// resolver, over a scrim drawn by [Spotlight].
+///
+/// {@category Tours}
 class HintTarget extends StatefulWidget {
   /// Creates a tour step around [child].
   const HintTarget({
@@ -597,6 +603,8 @@ class _HintTargetState extends State<HintTarget>
 ///
 /// Replace it per step with [HintTarget.contentBuilder]. It is exported so a
 /// custom card can reuse the pieces — or wrap this one and add to it.
+///
+/// {@category Tours}
 class TourStepCard extends StatelessWidget {
   /// Creates the default step card.
   const TourStepCard({

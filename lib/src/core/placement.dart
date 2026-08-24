@@ -8,6 +8,8 @@ import 'hint_side.dart';
 /// Everything in here is expressed in *overlay* coordinates, i.e. the
 /// coordinate space of the `Overlay` the bubble is painted into, whose origin
 /// is its top-left corner.
+///
+/// {@category Advanced}
 @immutable
 class HintPlacement {
   /// Creates a resolved placement.
@@ -99,6 +101,8 @@ class HintPlacement {
 ///
 /// All arguments must be finite; this is asserted in debug builds. The result
 /// is always finite, and [HintPlacement.arrowFraction] is always in 0..1.
+///
+/// {@category Advanced}
 HintPlacement resolvePlacement({
   required Rect target,
   required Size overlay,

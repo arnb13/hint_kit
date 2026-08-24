@@ -28,6 +28,8 @@ import 'package:flutter/foundation.dart';
 /// could not then describe either of them honestly.
 ///
 /// Dispose it with the [State] that owns it.
+///
+/// {@category Hints}
 class HintController extends ChangeNotifier {
   /// Creates a controller for a hint that starts hidden.
   HintController();

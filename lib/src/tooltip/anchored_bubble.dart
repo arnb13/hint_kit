@@ -25,6 +25,8 @@ import 'hint_bubble.dart';
 /// provisional position with the entry animation still at zero, i.e. fully
 /// transparent. [MeasureSize] reports the real size, placement resolves, and
 /// the animation starts. The provisional frame is never visible.
+///
+/// {@category Advanced}
 class AnchoredHintBubble extends StatefulWidget {
   /// Creates an anchored bubble.
   const AnchoredHintBubble({

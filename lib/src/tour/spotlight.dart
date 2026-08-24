@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 ///
 /// Construct one of the four constants, or [SpotlightShape.custom] for
 /// anything else.
+///
+/// {@category Tours}
 class SpotlightShape {
   const SpotlightShape._(this._kind, [this._builder]);
 
@@ -94,6 +96,8 @@ enum _SpotlightKind { rect, roundedRect, circle, oval, custom }
 /// [passthrough] mode the render object reports `hitTestSelf` false for
 /// positions inside the hole, so the widget underneath — the actual target —
 /// receives the pointer, and everything else is blocked.
+///
+/// {@category Advanced}
 class Spotlight extends StatelessWidget {
   /// Creates a scrim with a hole around [holeRect].
   const Spotlight({
@@ -344,6 +348,8 @@ class _SpotlightHitTestBlocker extends SingleChildRenderObjectWidget {
 /// false for a position inside the hole, so the hit test walks past the scrim
 /// to whatever is underneath — the real target, with its real gesture
 /// recognisers. Nothing is simulated and nothing is repositioned.
+///
+/// {@category Advanced}
 class RenderSpotlightBlocker extends RenderProxyBox {
   /// Creates a blocker for the given hole.
   RenderSpotlightBlocker({

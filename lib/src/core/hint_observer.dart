@@ -12,6 +12,8 @@ import 'tour_end_reason.dart';
 /// What happened to one hint.
 ///
 /// Handed to [HintObserver.didShowHint] and [HintObserver.didDismissHint].
+///
+/// {@category Advanced}
 @immutable
 class HintEvent {
   /// Creates a hint event.
@@ -70,6 +72,8 @@ class HintEvent {
 ///
 /// Callbacks run synchronously, inside the show or hide that caused them. Do
 /// not build widgets or call `setState` from one — queue the work.
+///
+/// {@category Advanced}
 abstract class HintObserver {
   /// Allows subclasses to be const.
   const HintObserver();

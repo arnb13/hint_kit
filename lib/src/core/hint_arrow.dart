@@ -15,6 +15,8 @@ import 'hint_side.dart';
 /// space as [HintArrowGeometry.tip] — the bubble's own space. It is unioned
 /// into the body, so the border and the shadow stay continuous however odd
 /// the silhouette is.
+///
+/// {@category Theming}
 typedef HintArrowBuilder = Path Function(HintArrowGeometry geometry);
 
 /// Where the caret sits and which way it points, handed to a
@@ -23,6 +25,8 @@ typedef HintArrowBuilder = Path Function(HintArrowGeometry geometry);
 /// Everything is already resolved for the side the bubble landed on, so a
 /// custom caret is written once and works on all four edges: build it from
 /// [baseCentre], [along] and [tip] rather than from raw x/y.
+///
+/// {@category Theming}
 @immutable
 class HintArrowGeometry {
   /// Creates the geometry handed to a custom arrow builder.
@@ -93,6 +97,8 @@ class HintArrowGeometry {
 ///
 /// Whichever shape is used, the caret is unioned into the bubble body as a
 /// single path, so the border stroke and the drop shadow stay continuous.
+///
+/// {@category Theming}
 enum HintArrowShape {
   /// A straight-sided triangle. The default.
   ///

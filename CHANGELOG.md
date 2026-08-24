@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- Warns in debug when persistence is wired for hints but not tours, or the reverse.
+- Grouped the API reference into Hints, Tours, Theming and Advanced.
+- Split the example into one file per feature.
+
 ## 1.1.1
 
 - Updated README documentation.

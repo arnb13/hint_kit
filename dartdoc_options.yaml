@@ -1,0 +1,29 @@
+# Groups the API reference so the page a newcomer lands on has a shape.
+#
+# Without this, all 49 exported names arrive in one alphabetical run, and
+# nothing distinguishes the handful you need on day one from the machinery
+# behind them.
+#
+# Two halves are both needed: `categories` declares them — dartdoc records an
+# undeclared `{@category}` but never shows it — and `categoryOrder` puts them
+# in the order you meet them rather than alphabetical. The membership itself is
+# a `{@category ...}` line in each class's doc comment.
+dartdoc:
+  categories:
+    Hints:
+      markdown: doc/categories/hints.md
+      name: Hints
+    Tours:
+      markdown: doc/categories/tours.md
+      name: Tours
+    Theming:
+      markdown: doc/categories/theming.md
+      name: Theming
+    Advanced:
+      markdown: doc/categories/advanced.md
+      name: Advanced
+  categoryOrder:
+    - Hints
+    - Tours
+    - Theming
+    - Advanced

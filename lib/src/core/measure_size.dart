@@ -3,6 +3,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 /// Signature for [MeasureSize.onChange].
+///
+/// {@category Advanced}
 typedef SizeChangedCallback = void Function(Size size);
 
 /// Reports the laid-out size of [child] to [onChange].
@@ -16,6 +18,8 @@ typedef SizeChangedCallback = void Function(Size size);
 /// [onChange] fires during layout, so it must not mark anything dirty
 /// synchronously. The callback is deferred to the end of the frame internally;
 /// callers can simply `setState`.
+///
+/// {@category Advanced}
 class MeasureSize extends SingleChildRenderObjectWidget {
   /// Wraps [child] in a size-reporting box.
   const MeasureSize({

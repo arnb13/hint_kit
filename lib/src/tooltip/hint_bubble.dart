@@ -31,6 +31,8 @@ import '../theme/hint_theme.dart';
 /// shape occupies exactly the same [arrowSize] box, so switching between them
 /// never moves the bubble; a custom caret is free to draw outside it, at the
 /// cost of that guarantee.
+///
+/// {@category Advanced}
 Path buildBubblePath({
   required Rect rect,
   required BorderRadius borderRadius,
@@ -222,6 +224,8 @@ BorderRadius _clampRadius(BorderRadius radius, Size size) {
 /// share one outline. This is exposed for callers who want the bubble
 /// chrome around their own content without the overlay machinery — a legend, a
 /// static callout in a diagram, a screenshot in documentation.
+///
+/// {@category Advanced}
 class HintBubbleDecoration extends StatelessWidget {
   /// Creates the bubble chrome around [child].
   const HintBubbleDecoration({
@@ -460,6 +464,8 @@ class _BubblePainter extends CustomPainter {
 ///
 /// Used when a [Hint] is given a `message` and/or `title` rather than a
 /// `contentBuilder`.
+///
+/// {@category Advanced}
 class HintBubbleContent extends StatelessWidget {
   /// Creates the default bubble content.
   ///

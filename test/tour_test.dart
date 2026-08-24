@@ -613,7 +613,8 @@ void main() {
             home: Scaffold(
               // A non-lazy scroll view: the target below the fold is built,
               // just not visible. A lazily-built target that has never been
-              // created cannot be scrolled to — see "Known limitations".
+              // created has not registered with the scope, so there is nothing
+              // to scroll to — see HintTarget's documentation.
               body: SingleChildScrollView(
                 controller: scroll,
                 child: const Column(

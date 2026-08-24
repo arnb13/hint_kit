@@ -19,6 +19,8 @@ library;
 /// Triggers are read from a raw [Listener], not a [GestureDetector], so they
 /// fire even when the child ignores pointers — a disabled button, for example
 /// — without stealing the gesture from a child that does handle it.
+///
+/// {@category Hints}
 enum HintTrigger {
   /// Show on a tap, hide on the next tap.
   ///

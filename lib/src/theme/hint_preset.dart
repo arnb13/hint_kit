@@ -46,6 +46,8 @@ import 'hint_theme.dart';
 ///
 /// To build a custom design *from* a preset rather than on top of one, take
 /// its values with [themeData] and edit them like any other [HintThemeData].
+///
+/// {@category Theming}
 enum HintPreset {
   /// The package's own default look: a dark chip in a light app and a light
   /// chip in a dark one, small radius, soft shadow, straight caret.

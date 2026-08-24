@@ -1,3 +1,4 @@
+/// @docImport '../tooltip/hint_registry.dart';
 /// @docImport 'hint_target.dart';
 library;
 
@@ -33,6 +34,8 @@ import 'tour_storage.dart';
 /// [HintTarget] through an [OverlayPortal], which is what lets a tour cross
 /// routes: the step is drawn into whatever overlay its target happens to live
 /// in, and a step whose target is not mounted yet simply waits for it.
+///
+/// {@category Tours}
 class TourScope extends StatefulWidget {
   /// Creates a tour scope.
   const TourScope({
@@ -61,8 +64,12 @@ class TourScope extends StatefulWidget {
 
   /// Where completed tours are remembered.
   ///
-  /// Defaults to [InMemoryTourStorage], which forgets on restart. Only valid
-  /// when [controller] is null — a supplied controller brings its own.
+  /// Defaults to an [InMemoryTourStorage], which forgets on restart. Only
+  /// valid when [controller] is null — a supplied controller brings its own.
+  ///
+  /// `Hint.showOnce` is remembered separately, in [HintRegistry.storage]:
+  /// giving both the same instance is the usual answer, and hint_kit says so
+  /// in debug when only one of the two is set.
   final TourStorage? storage;
 
   /// Visual overrides applied to every step in this scope.
@@ -167,9 +174,11 @@ class TourScope extends StatefulWidget {
 ///
 /// Reach it with [TourScope.of]. Most apps only need [Tour.of], which returns
 /// the controller directly.
+///
+/// {@category Tours}
 class TourScopeState extends State<TourScope> {
-  late TourController _controller = widget.controller ??
-      TourController(storage: widget.storage ?? InMemoryTourStorage());
+  late TourController _controller =
+      widget.controller ?? TourController(storage: widget.storage);
   bool _ownsController = false;
 
   /// Orders ever registered per tour, in ascending order.
@@ -237,8 +246,8 @@ class TourScopeState extends State<TourScope> {
         _controller.dispose();
       }
       _ownsController = widget.controller == null;
-      _controller = widget.controller ??
-          TourController(storage: widget.storage ?? InMemoryTourStorage());
+      _controller =
+          widget.controller ?? TourController(storage: widget.storage);
       _bind(_controller);
     }
   }
@@ -479,6 +488,8 @@ class _TourScopeMarker extends InheritedWidget {
 /// This is an [InheritedNotifier], so a widget that reads it with [Tour.of]
 /// rebuilds whenever the tour advances — handy for a "step 2 of 5" label in
 /// your own chrome. Use [Tour.read] to issue a command without subscribing.
+///
+/// {@category Tours}
 class Tour extends InheritedNotifier<TourController> {
   const Tour._({required TourController controller, required super.child})
       : super(notifier: controller);

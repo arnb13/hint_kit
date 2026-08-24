@@ -2,7 +2,7 @@ name: hint_kit
 description: >-
   Tooltips, persistent hints and spotlight guided tours from one overlay
   engine, one placement resolver and one theme. Zero runtime dependencies.
-version: 1.1.1
+version: 1.2.0
 repository: https://github.com/arnb13/hint_kit
 issue_tracker: https://github.com/arnb13/hint_kit/issues
 documentation: https://github.com/arnb13/hint_kit#readme

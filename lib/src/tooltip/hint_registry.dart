@@ -1,4 +1,5 @@
 /// @docImport 'package:flutter/widgets.dart';
+/// @docImport '../tour/tour_controller.dart';
 /// @docImport '../tour/tour_scope.dart';
 /// @docImport 'hint.dart';
 library;
@@ -30,6 +31,8 @@ abstract class DismissibleHint {
 ///
 /// This is process-global on purpose: an [InheritedWidget] would scope it to a
 /// subtree, and the overlay it is protecting is not scoped that way.
+///
+/// {@category Hints}
 class HintRegistry {
   HintRegistry._();
 
@@ -79,23 +82,58 @@ class HintRegistry {
   ///
   /// Defaults to an [InMemoryTourStorage], so a "seen it" hint comes back on
   /// the next launch until you point this at real persistence — once, at
-  /// startup:
+  /// startup. With `shared_preferences`, in full:
   ///
   /// ```dart
-  /// void main() {
+  /// Future<void> main() async {
+  ///   // Both lines: getInstance is async, and awaiting anything before
+  ///   // runApp needs the binding to exist first.
+  ///   WidgetsFlutterBinding.ensureInitialized();
+  ///   final SharedPreferences prefs = await SharedPreferences.getInstance();
+  ///
   ///   HintRegistry.instance.storage = CallbackTourStorage(
-  ///     isCompleted: (String key) async => prefs.getBool(key) ?? false,
-  ///     setCompleted: (String key, bool seen) async =>
-  ///         seen ? prefs.setBool(key, true) : prefs.remove(key),
+  ///     isCompleted: (String key) async =>
+  ///         prefs.getBool('hint_kit.$key') ?? false,
+  ///     setCompleted: (String key, bool seen) async => seen
+  ///         ? prefs.setBool('hint_kit.$key', true)
+  ///         : prefs.remove('hint_kit.$key'),
+  ///     // Both or neither: this pair is what `start(resume: true)` reads.
+  ///     lastIndex: (String tour) async => prefs.getInt('hint_kit.$tour.step'),
+  ///     saveIndex: (String tour, int? index) async => index == null
+  ///         ? prefs.remove('hint_kit.$tour.step')
+  ///         : prefs.setInt('hint_kit.$tour.step', index),
   ///   );
+  ///
   ///   runApp(const MyApp());
   /// }
   /// ```
   ///
-  /// It is the same interface tours use, and the same instance can serve both
-  /// — pass it to [TourScope.storage] as well. Keys are whatever string a hint
-  /// was given, so keep hint keys and tour names distinct.
-  TourStorage storage = InMemoryTourStorage();
+  /// Tours are remembered separately, in the [TourStorage] a [TourController]
+  /// or [TourScope] was given. Handing both the same instance is the usual
+  /// answer — hint_kit says so in debug when only one of the two is set. Keys
+  /// then share one space: a hint's key is whatever string it was given and a
+  /// tour's is its name, so keep the two distinct.
+  TourStorage get storage => _storage;
+
+  set storage(TourStorage value) {
+    _storage = value;
+    _storageWasSet = true;
+  }
+
+  TourStorage _storage = InMemoryTourStorage();
+
+  /// Whether [storage] was assigned, as opposed to left at its default.
+  ///
+  /// The difference is the whole basis of the debug wiring check: an explicit
+  /// [InMemoryTourStorage] is a decision, the default one is an oversight
+  /// waiting to happen.
+  bool _storageWasSet = false;
+
+  /// Whether any [TourController] was handed a storage of its own.
+  bool _explicitTourStorage = false;
+
+  /// Whether the wiring check has already had its say.
+  bool _warnedAboutWiring = false;
 
   /// Forgets the "already shown" flag for a [Hint.showOnce] key, so that hint
   /// appears again.
@@ -165,4 +203,89 @@ class HintRegistry {
       visit(observer);
     }
   }
+}
+
+// -----------------------------------------------------------------------------
+// The two-places check
+// -----------------------------------------------------------------------------
+//
+// hint_kit remembers two different things in two different places: showOnce
+// keys in HintRegistry.storage, and finished tours in the TourStorage a
+// TourController holds. Setting one and leaving the other at its in-memory
+// default is the easiest mistake to make with this package, and it fails
+// silently - half the app forgets on every launch and nothing says why.
+//
+// These are debug-only and package-internal: the barrel exports HintRegistry
+// alone, so none of them reach a caller.
+
+/// Records that a [TourController] was handed a storage of its own.
+void debugNoteExplicitTourStorage() {
+  assert(() {
+    HintRegistry.instance._explicitTourStorage = true;
+    return true;
+  }());
+}
+
+/// Puts the wiring flags back to a fresh process's state, for tests.
+void debugResetStorageWiring() {
+  assert(() {
+    HintRegistry.instance
+      .._storageWasSet = false
+      .._explicitTourStorage = false
+      .._warnedAboutWiring = false;
+    return true;
+  }());
+}
+
+/// Checks the wiring as a tour starts.
+///
+/// [tourUsesDefaultStorage] is whether the tour about to run is on the
+/// package's own in-memory storage rather than one its author chose.
+void debugCheckTourStorageWiring({required bool tourUsesDefaultStorage}) {
+  assert(() {
+    if (tourUsesDefaultStorage && HintRegistry.instance._storageWasSet) {
+      _warnAboutWiring(
+        'HintRegistry.instance.storage is set, but this tour is using the '
+        'default in-memory storage, so finished tours are forgotten on the '
+        'next launch while Hint.showOnce keys are kept.\n'
+        'Give the tour the same storage:\n'
+        '  TourScope(storage: myStorage, ...)\n'
+        '  TourController(storage: myStorage)',
+      );
+    }
+    return true;
+  }());
+}
+
+/// Checks the wiring when a `Hint.showOnce` key is consulted.
+void debugCheckShowOnceStorageWiring() {
+  assert(() {
+    final HintRegistry registry = HintRegistry.instance;
+    if (!registry._storageWasSet && registry._explicitTourStorage) {
+      _warnAboutWiring(
+        'A TourController was given persistent storage, but '
+        'HintRegistry.instance.storage is still the default in-memory one, so '
+        'Hint.showOnce keys are forgotten on the next launch while finished '
+        'tours are kept.\n'
+        'Set it once at startup, to the same storage:\n'
+        '  HintRegistry.instance.storage = myStorage;',
+      );
+    }
+    return true;
+  }());
+}
+
+/// Says [message] once per process, and never again.
+void _warnAboutWiring(String message) {
+  final HintRegistry registry = HintRegistry.instance;
+  if (registry._warnedAboutWiring) {
+    return;
+  }
+  registry._warnedAboutWiring = true;
+  debugPrint(
+    'hint_kit: persistence is set in one of its two places, not both.\n'
+    '$message\n'
+    'Pass an InMemoryTourStorage() explicitly for the half you want to '
+    'forget. This message is debug-only and is said once.',
+  );
 }

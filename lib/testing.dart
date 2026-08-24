@@ -46,6 +46,10 @@ void resetHintKit() {
     ..closeAll()
     ..removeAllObservers()
     ..storage = InMemoryTourStorage();
+  // Last: assigning storage above counts as setting it, and a fresh process
+  // has not. Otherwise every test that runs a tour would be told off for
+  // wiring persistence in one place only.
+  debugResetStorageWiring();
 }
 
 /// A [TourStorage] with the state a test wants to arrange up front.

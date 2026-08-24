@@ -32,6 +32,8 @@ library;
 ///
 /// Implementations must tolerate being called concurrently and must not throw
 /// for an unknown tour name.
+///
+/// {@category Tours}
 abstract class TourStorage {
   /// Creates a storage. Const so implementations can be too.
   const TourStorage();
@@ -91,6 +93,8 @@ abstract class TourStorage {
 /// One setter covers both writes: [markCompleted] calls it with `true` and
 /// [reset] with `false`, so the two can never disagree about where the flag
 /// lives.
+///
+/// {@category Tours}
 class CallbackTourStorage implements TourStorage {
   /// Creates a storage backed by [isCompleted] and [setCompleted].
   ///
@@ -141,6 +145,8 @@ class CallbackTourStorage implements TourStorage {
 /// default for a package with no dependencies — it is obvious, it never
 /// silently loses data, and it makes the "wire up your own persistence" step
 /// impossible to forget by accident.
+///
+/// {@category Tours}
 class InMemoryTourStorage implements TourStorage {
   /// Creates an empty in-memory storage.
   InMemoryTourStorage();

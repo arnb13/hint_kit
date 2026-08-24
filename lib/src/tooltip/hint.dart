@@ -17,6 +17,8 @@ import 'hint_controller.dart';
 import 'hint_registry.dart';
 
 /// Signature for building rich hint content.
+///
+/// {@category Hints}
 typedef HintContentBuilder = Widget Function(BuildContext context);
 
 /// A tooltip, a persistent hint or a programmatic callout attached to [child].
@@ -75,6 +77,8 @@ typedef HintContentBuilder = Widget Function(BuildContext context);
 /// The bubble is shown with an [OverlayPortal], so its lifetime is tied to
 /// this widget's element. Popping the route mid-tooltip takes the bubble with
 /// it; there is no [OverlayEntry] left behind to leak.
+///
+/// {@category Hints}
 class Hint extends StatefulWidget {
   /// Creates a hint attached to [child].
   ///
@@ -364,6 +368,7 @@ class _HintState extends State<Hint>
       _showOnceReady = null;
       return;
     }
+    debugCheckShowOnceStorageWiring();
     _showOnceBlocked = true;
     _showOnceReady = HintRegistry.instance.storage.isCompleted(key).then(
       (bool seen) {

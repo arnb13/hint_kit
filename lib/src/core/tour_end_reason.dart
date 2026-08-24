@@ -6,6 +6,8 @@ library;
 /// Lives here rather than beside [TourController] so that the observer
 /// interface — which is in the hint layer, below the tour — can name it
 /// without the two layers importing each other.
+///
+/// {@category Tours}
 enum TourEndReason {
   /// The user reached the last step and confirmed it.
   finished,

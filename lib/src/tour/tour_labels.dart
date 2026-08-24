@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 /// Signature for rendering a step counter.
 ///
 /// [step] is one-based and [length] is the number of steps in the tour.
+///
+/// {@category Tours}
 typedef TourProgressBuilder = String Function(int step, int length);
 
 /// The words on the default tour step card.
@@ -37,6 +39,8 @@ typedef TourProgressBuilder = String Function(int step, int length);
 /// A step card built with [HintTarget.contentBuilder] gets the same labels via
 /// [TourStepInfo.labels], so a custom card can be localised the same way
 /// without reaching for a second mechanism.
+///
+/// {@category Tours}
 @immutable
 class TourLabels {
   /// Creates a set of labels. The defaults are English.

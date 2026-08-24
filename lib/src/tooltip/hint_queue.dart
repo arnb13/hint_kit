@@ -39,6 +39,8 @@ import 'hint_controller.dart';
 ///
 /// This is deliberately not a [TourScope]: there is no scrim, no spotlight, no
 /// step card and no persistence. For those, use [HintTarget].
+///
+/// {@category Hints}
 class HintQueue extends ChangeNotifier {
   /// Creates a queue over [controllers], in the order they should appear.
   HintQueue(

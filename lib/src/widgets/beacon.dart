@@ -37,6 +37,8 @@ import '../tooltip/hint_controller.dart';
 /// ```dart
 /// await tester.pump(const Duration(milliseconds: 300));
 /// ```
+///
+/// {@category Hints}
 class Beacon extends StatefulWidget {
   /// Creates a beacon.
   ///

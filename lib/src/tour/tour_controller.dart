@@ -12,9 +12,13 @@ import '../tooltip/hint_registry.dart';
 import 'tour_storage.dart';
 
 /// Signature for [TourController.onStepChanged].
+///
+/// {@category Tours}
 typedef TourStepCallback = void Function(String tour, int index);
 
 /// Signature for [TourController.onEnd].
+///
+/// {@category Tours}
 typedef TourEndCallback = void Function(String tour, TourEndReason reason);
 
 /// Runs a guided tour: which tour is active, which step it is on, and how it
@@ -26,27 +30,48 @@ typedef TourEndCallback = void Function(String tour, TourEndReason reason);
 /// yet simply has nothing to point at until it registers.
 ///
 /// ```dart
-/// final TourController tour = TourController();
+/// final TourController tour = TourController(storage: myStorage);
 ///
 /// TourScope(
 ///   controller: tour,
-///   storage: myStorage,
 ///   child: const MyApp(),
 /// );
 ///
 /// // Anywhere below the scope:
 /// Tour.of(context).start('onboarding');
 /// ```
+///
+/// {@category Tours}
 class TourController extends ChangeNotifier {
   /// Creates a tour controller.
   ///
   /// [storage] defaults to an [InMemoryTourStorage], which forgets everything
-  /// when the process ends. Pass your own to make "seen it already" stick.
+  /// when the process ends. Pass your own to make "seen it already" stick —
+  /// and remember that `Hint.showOnce` is remembered separately, in
+  /// [HintRegistry.storage]. Passing the same instance to both is the usual
+  /// answer; hint_kit says so in debug when only one of the two is set.
   TourController({TourStorage? storage, this.onStepChanged, this.onEnd})
-      : storage = storage ?? InMemoryTourStorage();
+      : _storage = storage {
+    if (storage != null) {
+      debugNoteExplicitTourStorage();
+    }
+  }
+
+  /// The storage passed to the constructor, or null when it defaulted.
+  ///
+  /// Kept apart from [storage] so the debug wiring check can tell "the caller
+  /// chose in-memory" from "the caller chose nothing".
+  final TourStorage? _storage;
+
+  /// Used only when no storage was supplied. Created once, not per read, or
+  /// every lookup would consult an empty store.
+  late final TourStorage _ownStorage = InMemoryTourStorage();
 
   /// Where completed tours are recorded.
-  final TourStorage storage;
+  TourStorage get storage => _storage ?? _ownStorage;
+
+  /// Whether this controller is running on the default in-memory storage.
+  bool get _storageDefaulted => _storage == null;
 
   /// Called whenever the active step changes, including the first one.
   final TourStepCallback? onStepChanged;
@@ -117,6 +142,7 @@ class TourController extends ChangeNotifier {
     bool resume = false,
   }) async {
     assert(tour.isNotEmpty, 'A tour needs a name.');
+    debugCheckTourStorageWiring(tourUsesDefaultStorage: _storageDefaulted);
     if (_activeTour == tour) {
       return;
     }

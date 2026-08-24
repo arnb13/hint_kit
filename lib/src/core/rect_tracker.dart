@@ -3,6 +3,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 /// How often a [HintRectTracker] re-measures its target.
+///
+/// {@category Advanced}
 enum RectTrackingMode {
   /// Measure on show, on scroll, on window metric changes and on an explicit
   /// `refresh()`.
@@ -49,6 +51,8 @@ enum RectTrackingMode {
 ///   super.dispose();
 /// }
 /// ```
+///
+/// {@category Advanced}
 class HintRectTracker extends ChangeNotifier
     with WidgetsBindingObserver
     implements ValueListenable<Rect?> {
