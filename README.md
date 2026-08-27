@@ -43,7 +43,7 @@ Every one of these is the example app on a device — nothing is mocked up. Run 
 
 ```yaml
 dependencies:
-  hint_kit: ^1.1.0
+  hint_kit: ^1.2.1
 ```
 
 or:
@@ -125,6 +125,33 @@ tour.cancel();
 
 Tours can wait for targets that are not currently mounted, making route-spanning onboarding possible.
 
+### Conditional steps
+
+A step that is simply not built is one the tour **waits for** — it cannot tell "this user does not have that feature" from "this user has not opened that screen yet". Say so explicitly:
+
+```dart
+HintTarget(
+  tour: 'onboarding',
+  order: 3,
+  enabled: user.canApproveShifts,
+  child: approveButton,
+)
+```
+
+The child renders either way; only the tour ignores it. An opted-out step is subtracted from `tourLengths`, so the card reads "3 of 4" rather than "3 of 5" with one that never comes.
+
+For the cases you cannot predict — a target deleted in a refactor, a screen that fails to load — give the scope a deadline:
+
+```dart
+TourScope(
+  stepTimeout: const Duration(seconds: 5),
+  onStepUnavailable: (tour, index) => analytics.log('tour_step_missing', index),
+  child: const MyApp(),
+);
+```
+
+It is null by default, deliberately: waiting forever is what makes route-spanning tours work.
+
 ## Spotlight & passthrough
 
 ```dart
@@ -162,6 +189,8 @@ TourScope(
 
 HintRegistry.instance.storage = myStorage;
 ```
+
+Both wires are needed, and they are separate on purpose: `TourScope.storage` persists tour progress, `HintRegistry.instance.storage` persists `showOnce` hints. Setting one and not the other warns in debug.
 
 ## Theming
 
@@ -263,6 +292,7 @@ Beacon(
 ## Links
 
 - [Pub.dev](https://pub.dev/packages/hint_kit)
+- [API reference](https://pub.dev/documentation/hint_kit/latest/)
 - [Repository](https://github.com/arnb13/hint_kit)
 - [Issues](https://github.com/arnb13/hint_kit/issues)
 
