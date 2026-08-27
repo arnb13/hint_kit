@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Documented conditional steps, step timeouts and the two storage wires in the README.
+- Linked the API reference from the README and pubspec.
+
 ## 1.2.0
 
 - Warns in debug when persistence is wired for hints but not tours, or the reverse.
