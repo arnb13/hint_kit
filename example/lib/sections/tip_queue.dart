@@ -38,9 +38,15 @@ class _TipQueueSectionState extends State<TipQueueSection> {
               'the last to be dismissed. No scrim, no spotlight, no step '
               'card — just three tips in order.',
         ),
-        Row(
+        // A Wrap, not a Row: three chips and a button are 0.8 px too wide for
+        // a 344 px phone, and a Row would rather report an overflow than let
+        // the last one drop to a second line.
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            for (int i = 0; i < _tips.length; i++) ...<Widget>[
+            for (int i = 0; i < _tips.length; i++)
               Hint(
                 controller: _tips[i],
                 triggers: const <HintTrigger>{HintTrigger.manual},
@@ -48,8 +54,6 @@ class _TipQueueSectionState extends State<TipQueueSection> {
                 dismissOnTapOutside: true,
                 child: Chip(label: Text('Tip ${i + 1}')),
               ),
-              const SizedBox(width: 8),
-            ],
             FilledButton.tonal(
               onPressed: _tipQueue.start,
               child: const Text('Run the tips'),

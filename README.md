@@ -36,14 +36,14 @@ Every one of these is the example app on a device — nothing is mocked up. Run 
 - 💾 **Persistence** — show-once hints and interrupted-tour resume.
 - 🌍 **Localization** — custom labels and progress formatting.
 - 📊 **Analytics** — app-wide hint and tour observer.
-- ♿ **Accessibility** — semantics, focus handling, text scaling, high contrast, reduced motion, and Esc support.
+- ♿ **Accessibility** — bubbles spoken as live regions, focus handling, text scaling, high contrast, reduced motion, and Esc support.
 - 📦 **Zero dependencies** — pure Flutter.
 
 ## Install
 
 ```yaml
 dependencies:
-  hint_kit: ^1.2.1
+  hint_kit: ^1.3.0
 ```
 
 or:

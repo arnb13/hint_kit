@@ -295,6 +295,99 @@ void main() {
       expect(find.text('Once'), findsOneWidget);
     });
 
+    testWidgets('resetShowOnce re-arms a hint that is still on screen',
+        (WidgetTester tester) async {
+      final HintController controller = HintController();
+      addTearDown(controller.dispose);
+      await pumpHint(
+        tester,
+        Hint(
+          controller: controller,
+          showOnce: 'whats-new',
+          triggers: const <HintTrigger>{HintTrigger.manual},
+          message: 'Once',
+          child: const SizedBox(width: 60, height: 30),
+        ),
+      );
+
+      controller.show();
+      await tester.pumpAndSettle();
+      controller.hide();
+      await tester.pumpAndSettle();
+      controller.show();
+      await tester.pumpAndSettle();
+      expect(find.text('Once'), findsNothing);
+
+      // A "show it again" button pressed on the screen the hint lives on:
+      // nothing is rebuilt, so clearing storage alone would leave the flag
+      // cached in the state and the hint silent until the next launch.
+      await HintRegistry.instance.resetShowOnce('whats-new');
+      await tester.pumpAndSettle();
+      controller.show();
+      await tester.pumpAndSettle();
+      expect(find.text('Once'), findsOneWidget);
+    });
+
+    testWidgets('a reset for another key leaves this hint blocked',
+        (WidgetTester tester) async {
+      final HintController controller = HintController();
+      addTearDown(controller.dispose);
+      await pumpHint(
+        tester,
+        Hint(
+          controller: controller,
+          showOnce: 'whats-new',
+          triggers: const <HintTrigger>{HintTrigger.manual},
+          message: 'Once',
+          child: const SizedBox(width: 60, height: 30),
+        ),
+      );
+
+      controller.show();
+      await tester.pumpAndSettle();
+      controller.hide();
+      await tester.pumpAndSettle();
+
+      await HintRegistry.instance.resetShowOnce('some-other-key');
+      await tester.pumpAndSettle();
+      controller.show();
+      await tester.pumpAndSettle();
+      expect(find.text('Once'), findsNothing);
+    });
+
+    testWidgets('a new key is read afresh', (WidgetTester tester) async {
+      final HintController controller = HintController();
+      addTearDown(controller.dispose);
+      Widget build(String showOnce) => MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              body: Center(
+                child: Hint(
+                  controller: controller,
+                  showOnce: showOnce,
+                  triggers: const <HintTrigger>{HintTrigger.manual},
+                  message: 'Once',
+                  child: const SizedBox(width: 60, height: 30),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(build('first-key'));
+      controller.show();
+      await tester.pumpAndSettle();
+      controller.hide();
+      await tester.pumpAndSettle();
+
+      // Same state, different key: what was recorded for the old one says
+      // nothing about this one.
+      await tester.pumpWidget(build('second-key'));
+      await tester.pumpAndSettle();
+      controller.show();
+      await tester.pumpAndSettle();
+      expect(find.text('Once'), findsOneWidget);
+    });
+
     testWidgets('a hint without a key is never blocked',
         (WidgetTester tester) async {
       await pumpHint(

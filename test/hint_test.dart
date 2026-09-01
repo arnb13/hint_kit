@@ -965,6 +965,123 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('the open bubble is a live region reading title and message',
+        (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pumpApp(
+        tester,
+        const Hint(
+          title: 'Shifts',
+          message: 'Check in here',
+          triggers: <HintTrigger>{HintTrigger.tap},
+          child: Text('target'),
+        ),
+      );
+      await tester.tap(find.text('target'));
+      await tester.pumpAndSettle();
+      // The bubble stands in for its own text — one node, spoken as it
+      // arrives, and still there to be read afterwards.
+      expect(
+        tester.getSemantics(find.text('Check in here')),
+        matchesSemantics(label: 'Shifts\nCheck in here', isLiveRegion: true),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('semanticsLabel replaces the text the bubble reads out',
+        (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pumpApp(
+        tester,
+        const Hint(
+          message: 'Check in here',
+          semanticsLabel: 'Check in to start your shift',
+          triggers: <HintTrigger>{HintTrigger.tap},
+          child: Text('target'),
+        ),
+      );
+      await tester.tap(find.text('target'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.text('Check in here')),
+        matchesSemantics(
+          label: 'Check in to start your shift',
+          isLiveRegion: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('excludeFromSemantics leaves the bubble a plain text node',
+        (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pumpApp(
+        tester,
+        const Hint(
+          message: 'Check in here',
+          excludeFromSemantics: true,
+          triggers: <HintTrigger>{HintTrigger.tap},
+          child: Text('target'),
+        ),
+      );
+      await tester.tap(find.text('target'));
+      await tester.pumpAndSettle();
+      // matchesSemantics asserts every flag it is not given is false, so this
+      // is the assertion that nothing is announced.
+      expect(
+        tester.getSemantics(find.text('Check in here')),
+        matchesSemantics(label: 'Check in here'),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('rich content keeps its own semantics and says nothing',
+        (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pumpApp(
+        tester,
+        Hint(
+          contentBuilder: (BuildContext context) => const Text('rich'),
+          triggers: const <HintTrigger>{HintTrigger.tap},
+          child: const Text('target'),
+        ),
+      );
+      await tester.tap(find.text('target'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.text('rich')),
+        matchesSemantics(label: 'rich'),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('rich content is announced when semanticsLabel is given',
+        (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pumpApp(
+        tester,
+        Hint(
+          contentBuilder: (BuildContext context) => const Text('rich'),
+          semanticsLabel: 'Two shifts need attention',
+          triggers: const <HintTrigger>{HintTrigger.tap},
+          child: const Text('target'),
+        ),
+      );
+      await tester.tap(find.text('target'));
+      await tester.pumpAndSettle();
+      // The label announces; the content below it stays readable, because it
+      // can hold buttons of its own.
+      expect(
+        tester.getSemantics(find.text('rich')),
+        matchesSemantics(label: 'rich'),
+      );
+      expect(
+        find.bySemanticsLabel('Two shifts need attention'),
+        findsOneWidget,
+      );
+      handle.dispose();
+    });
+
     testWidgets('appears instantly when animations are disabled',
         (WidgetTester tester) async {
       await pumpApp(

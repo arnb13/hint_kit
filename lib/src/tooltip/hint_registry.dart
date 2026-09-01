@@ -139,8 +139,20 @@ class HintRegistry {
   /// appears again.
   ///
   /// The counterpart to a "replay the tour" button, and the reset a test needs
-  /// between cases.
-  Future<void> resetShowOnce(String key) => storage.reset(key);
+  /// between cases. A hint that is already on screen hears about this and
+  /// re-arms itself, so the button works without a rebuild or a restart.
+  Future<void> resetShowOnce(String key) async {
+    await storage.reset(key);
+    // A copy: a listener that removes itself while being told would otherwise
+    // mutate the list mid-iteration.
+    for (final ShowOnceResetListener listener
+        in List<ShowOnceResetListener>.of(_showOnceResetListeners)) {
+      listener(key);
+    }
+  }
+
+  final List<ShowOnceResetListener> _showOnceResetListeners =
+      <ShowOnceResetListener>[];
 
   // ---------------------------------------------------------------------------
   // Observers
@@ -204,6 +216,22 @@ class HintRegistry {
     }
   }
 }
+
+/// Signature for hearing that a [Hint.showOnce] key was forgotten.
+typedef ShowOnceResetListener = void Function(String key);
+
+/// Subscribes [listener] to [HintRegistry.resetShowOnce].
+///
+/// How a mounted hint learns that its key was forgotten: the state caches the
+/// flag as the bubble opens, so without this a "show it again" button only
+/// took effect on the next launch. Package-internal — the barrel exports
+/// [HintRegistry] alone, the same way the controller plumbing stays private.
+void addShowOnceResetListener(ShowOnceResetListener listener) =>
+    HintRegistry.instance._showOnceResetListeners.add(listener);
+
+/// Unsubscribes [listener]. Unknown listeners are ignored.
+void removeShowOnceResetListener(ShowOnceResetListener listener) =>
+    HintRegistry.instance._showOnceResetListeners.remove(listener);
 
 // -----------------------------------------------------------------------------
 // The two-places check

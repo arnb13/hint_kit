@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+
+- Bubbles are spoken as semantic live regions, replacing the `SemanticsService.announce` call Android deprecates.
+- Fixed `HintRegistry.resetShowOnce` doing nothing to a hint that is already on screen.
+- A hint re-reads its `showOnce` flag when the key changes.
+- No API changes. Tests that asserted an announcement should assert `isLiveRegion` on the bubble instead.
+
 ## 1.2.1
 
 - Documented conditional steps, step timeouts and the two storage wires in the README.

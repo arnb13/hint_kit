@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -210,15 +209,22 @@ class Hint extends StatefulWidget {
   /// effect. Give the hint a new [Key] if you need to switch modes at runtime.
   final bool followTarget;
 
-  /// Overrides the semantic tooltip announced for the target.
+  /// Overrides the text a screen reader gets, in both places the hint speaks:
+  /// the target's semantic tooltip, and the open bubble.
   ///
-  /// Defaults to [message]. Ignored when [excludeFromSemantics] is true.
+  /// Defaults to [message] for the tooltip, and to [title] and [message]
+  /// together for the bubble. Content from a [contentBuilder] has no text of
+  /// its own, so it is spoken as it opens only when this is set — the content's
+  /// own semantics stay readable either way.
+  ///
+  /// Ignored when [excludeFromSemantics] is true.
   final String? semanticsLabel;
 
   /// Whether to skip adding a semantic tooltip to the target.
   ///
   /// Set this when the child already carries the same information — otherwise
-  /// a screen reader reads it twice.
+  /// a screen reader reads it twice. Also stops the bubble from being spoken
+  /// as it opens.
   final bool excludeFromSemantics;
 
   /// Shows this hint only the first time, ever, under this key.
@@ -345,6 +351,7 @@ class _HintState extends State<Hint>
     super.initState();
     _attachController(widget.controller);
     _readShowOnce();
+    addShowOnceResetListener(_onShowOnceReset);
     if (widget.triggers.contains(HintTrigger.onAppear)) {
       // The target has not been laid out yet; showing now would measure an
       // empty rect.
@@ -358,6 +365,19 @@ class _HintState extends State<Hint>
         }
       });
     }
+  }
+
+  /// Re-arms this hint when its own [Hint.showOnce] key is forgotten.
+  ///
+  /// The flag is cached in this state — it is latched as the bubble opens, so
+  /// that the same hint cannot open twice in one session — and a reset has to
+  /// clear that cache as well as the storage, or "show it again" would only
+  /// work after a restart.
+  void _onShowOnceReset(String key) {
+    if (key != widget.showOnce) {
+      return;
+    }
+    _readShowOnce();
   }
 
   /// Reads the [Hint.showOnce] flag, if there is a key.
@@ -406,6 +426,11 @@ class _HintState extends State<Hint>
     if (oldWidget.controller != widget.controller) {
       _detachController(oldWidget.controller);
       _attachController(widget.controller);
+    }
+    if (oldWidget.showOnce != widget.showOnce) {
+      // A new key is a new question; the answer cached for the old one says
+      // nothing about it.
+      _readShowOnce();
     }
     if (_isShown &&
         oldWidget.triggers != widget.triggers &&
@@ -500,7 +525,6 @@ class _HintState extends State<Hint>
     _syncController(shown: true);
     widget.onShow?.call();
     HintRegistry.instance.notifyShown(_event);
-    _announce();
     setState(() {});
   }
 
@@ -558,23 +582,29 @@ class _HintState extends State<Hint>
   @override
   void dismissForExclusivity() => hide();
 
-  void _announce() {
+  /// What a screen reader reads out when the bubble opens.
+  ///
+  /// Null when the hint opts out of semantics, or when there is nothing to
+  /// read: rich content has no text of its own, so a caller who wants it
+  /// spoken passes [Hint.semanticsLabel].
+  String? get _bubbleSemanticsLabel {
     if (widget.excludeFromSemantics) {
-      return;
+      return null;
     }
-    final String? text =
-        widget.semanticsLabel ?? widget.message ?? widget.title;
-    if (text == null || text.isEmpty) {
-      return;
+    final String? explicit = widget.semanticsLabel;
+    if (explicit != null) {
+      return explicit.isEmpty ? null : explicit;
     }
-    // Rich content has no text to announce automatically; a caller that wants
-    // one passes semanticsLabel.
-    //
-    // `sendAnnouncement` supersedes this, but only from Flutter 3.35. The
-    // package supports 3.24, so the deprecated call stays until the floor
-    // moves.
-    // ignore: deprecated_member_use
-    SemanticsService.announce(text, Directionality.of(context));
+    if (widget.contentBuilder != null) {
+      return null;
+    }
+    // Both lines, in reading order: the bubble node stands in for the text it
+    // hides from the tree, so dropping the title would lose it entirely.
+    final String text = <String?>[widget.title, widget.message]
+        .whereType<String>()
+        .where((String part) => part.isNotEmpty)
+        .join('\n');
+    return text.isEmpty ? null : text;
   }
 
   bool get _animationsDisabled =>
@@ -939,6 +969,46 @@ class _HintState extends State<Hint>
             title: widget.title,
             message: widget.message,
           );
+    return _asLiveRegion(
+      _withPointerBehaviour(content),
+      isCustom: builder != null,
+    );
+  }
+
+  /// Marks the bubble as a live region so a screen reader speaks it as it
+  /// appears.
+  ///
+  /// This replaces a `SemanticsService.announce` call: the bubble *is* the
+  /// announcement, so it is both spoken on arrival and still there to be read
+  /// afterwards, where a fire-and-forget announcement was gone the moment it
+  /// was missed. `announce` is also deprecated on Android
+  /// (flutter/flutter#165510).
+  ///
+  /// The label sits on this node rather than on the text inside it because
+  /// Android only announces a live region whose own label changed — a live
+  /// region labelled only by its children is silently skipped.
+  Widget _asLiveRegion(Widget content, {required bool isCustom}) {
+    final String? label = _bubbleSemanticsLabel;
+    if (label == null) {
+      return content;
+    }
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: label,
+      // The default bubble is text this label already repeats word for word,
+      // so it is excluded and the bubble reads as one node. Custom content can
+      // hold buttons, which have to keep their own semantics — and their own
+      // nodes: without explicitChildNodes a child's label, and its button
+      // flag, would be merged into this one node instead.
+      excludeSemantics: !isCustom,
+      explicitChildNodes: true,
+      child: content,
+    );
+  }
+
+  /// Applies [Hint.interactive] to the built content.
+  Widget _withPointerBehaviour(Widget content) {
     if (!widget.interactive) {
       // A non-interactive bubble must never eat a pointer: it is decoration.
       return IgnorePointer(child: content);
@@ -1031,6 +1101,7 @@ class _HintState extends State<Hint>
     _longPressTimer?.cancel();
     _exitTimer?.cancel();
     _removeKeyHandler();
+    removeShowOnceResetListener(_onShowOnceReset);
     HintRegistry.instance.close(this);
     _detachController(widget.controller);
     _tracker.dispose();
