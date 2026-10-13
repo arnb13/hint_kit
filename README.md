@@ -43,7 +43,7 @@ Every one of these is the example app on a device — nothing is mocked up. Run 
 
 ```yaml
 dependencies:
-  hint_kit: ^1.3.0
+  hint_kit: ^1.3.1
 ```
 
 or:

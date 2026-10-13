@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed crashes when a `HintTarget` mounts mid-tour: inside a scroll view, or in a tour with no declared length ([#1](https://github.com/arnb13/hint_kit/issues/1)).
+- Fixed a crash on Flutter < 3.47 when a `Hint` or `HintTarget` that never showed is disposed.
+- No API changes. A step whose target mounts while it is active now appears one frame later, so a widget test may need one more `pump`.
+
 ## 1.3.0
 
 - Bubbles are spoken as semantic live regions, replacing the `SemanticsService.announce` call Android deprecates.

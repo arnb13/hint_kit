@@ -300,11 +300,20 @@ class TourScopeState extends State<TourScope> {
     final SplayTreeSet<int> seen =
         _seenOrders.putIfAbsent(tour, SplayTreeSet<int>.new);
     final bool isNew = seen.add(order);
-    if (isNew && _controller.activeTour == tour) {
-      updateTourLength(_controller, stepCount(tour));
-    }
-    // A target that mounts after its step became active must catch up.
-    onTourChanged();
+    // As in disableTarget, this runs from didChangeDependencies, during build.
+    // Notifying the controller now would mark its dependents dirty mid-build,
+    // and activating the step now would scroll to a target that has not been
+    // laid out — Scrollable.ensureVisible needs its render object.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(_mounted[tour]?[order], onTourChanged)) {
+        return;
+      }
+      if (isNew && _controller.activeTour == tour) {
+        updateTourLength(_controller, stepCount(tour));
+      }
+      // A target that mounts after its step became active must catch up.
+      onTourChanged();
+    });
     _watchForUnavailableStep();
   }
 

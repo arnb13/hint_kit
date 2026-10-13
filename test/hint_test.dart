@@ -925,6 +925,21 @@ void main() {
     });
   });
 
+  group('lifecycle', () {
+    testWidgets('a hint that never opened disposes cleanly',
+        (WidgetTester tester) async {
+      // GitHub issue #1. Before Flutter 3.47 this threw: the lazily created
+      // controller was first read in dispose, and creating a ticker on a
+      // deactivated element asserts. Newer frameworks tolerate it, so this
+      // only bites there.
+      await pumpApp(
+        tester,
+        const Hint(message: 'Check in here', child: Text('target')),
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
   group('accessibility', () {
     testWidgets('the target carries a semantic tooltip',
         (WidgetTester tester) async {

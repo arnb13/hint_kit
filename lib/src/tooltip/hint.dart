@@ -302,10 +302,10 @@ class _HintState extends State<Hint>
         ? RectTrackingMode.perFrame
         : RectTrackingMode.onDemand,
   );
-  late final AnimationController _animation = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 150),
-  );
+  // Created in initState, not lazily: a hint that never opened would otherwise
+  // construct its controller in dispose, and creating a ticker on a
+  // deactivated element throws before Flutter 3.47.
+  late final AnimationController _animation;
 
   Timer? _waitTimer;
   Timer? _showTimer;
@@ -349,6 +349,10 @@ class _HintState extends State<Hint>
   @override
   void initState() {
     super.initState();
+    _animation = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
     _attachController(widget.controller);
     _readShowOnce();
     addShowOnceResetListener(_onShowOnceReset);

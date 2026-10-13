@@ -253,29 +253,40 @@ class _HintTargetState extends State<HintTarget>
   final HintRectTracker _tracker = HintRectTracker(
     mode: RectTrackingMode.perFrame,
   );
-  late final AnimationController _animation = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 150),
-  );
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  );
+  // The controllers are created in initState, not lazily: a step that never
+  // became active would otherwise construct them in dispose, and creating a
+  // ticker on a deactivated element throws before Flutter 3.47.
+  late final AnimationController _animation;
+  late final AnimationController _pulse;
 
   /// Drives the spotlight's journey from the previous step's hole to this
   /// one's. `1` means "arrived", which is also where it sits when there is
   /// nothing to travel from.
-  late final AnimationController _travel = AnimationController(
-    vsync: this,
-    value: 1,
-    duration: const Duration(milliseconds: 320),
-  );
+  late final AnimationController _travel;
 
   TourScopeState? _scope;
   bool _isActive = false;
 
   /// The previous step's hole, captured as this step became active.
   Rect? _travelFrom;
+
+  @override
+  void initState() {
+    super.initState();
+    _animation = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _travel = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: const Duration(milliseconds: 320),
+    );
+  }
 
   @override
   void didChangeDependencies() {

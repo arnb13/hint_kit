@@ -301,4 +301,105 @@ void main() {
       expect(tour.isRunning, isFalse);
     });
   });
+
+  // GitHub issue #1. Targets register from didChangeDependencies, which runs
+  // during build, so whatever registering triggers has to wait for the frame.
+  group('targets that mount mid-tour', () {
+    /// The steps in [orders], in a column that optionally sits at the bottom
+    /// of a tall scroll view.
+    Widget steps(
+      TourController controller,
+      List<int> orders, {
+      bool scroll = false,
+    }) {
+      final Widget column = Column(
+        children: <Widget>[
+          if (scroll) const SizedBox(height: 2000),
+          for (final int order in orders)
+            HintTarget(
+              tour: 'onboarding',
+              order: order,
+              title: 'Step $order',
+              child: const SizedBox(width: 80, height: 40),
+            ),
+        ],
+      );
+      return TourScope(
+        controller: controller,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: scroll ? SingleChildScrollView(child: column) : column,
+          ),
+        ),
+      );
+    }
+
+    testWidgets('a step after the active one joins without a build error',
+        (WidgetTester tester) async {
+      final TourController tour = TourController();
+      addTearDown(tour.dispose);
+      await tester.pumpWidget(steps(tour, <int>[1, 2]));
+      await tour.start('onboarding');
+      await tester.pumpAndSettle();
+      expect(tour.length, 2);
+
+      await tester.pumpWidget(steps(tour, <int>[1, 2, 3]));
+      await tester.pumpAndSettle();
+
+      expect(tour.length, 3);
+      expect(find.text('Step 1'), findsOneWidget);
+    });
+
+    testWidgets('a step before the active one joins without a build error',
+        (WidgetTester tester) async {
+      final TourController tour = TourController();
+      addTearDown(tour.dispose);
+      await tester.pumpWidget(steps(tour, <int>[1, 3]));
+      await tour.start('onboarding');
+      await tester.pumpAndSettle();
+      tour.next();
+      await tester.pumpAndSettle();
+      expect(find.text('Step 3'), findsOneWidget);
+
+      await tester.pumpWidget(steps(tour, <int>[1, 2, 3]));
+      await tester.pumpAndSettle();
+
+      expect(tour.length, 3);
+      expect(tour.index, 1);
+      expect(find.text('Step 2'), findsOneWidget);
+    });
+
+    testWidgets('an active step that mounts in a scroll view is scrolled to',
+        (WidgetTester tester) async {
+      final TourController tour = TourController();
+      addTearDown(tour.dispose);
+      await tester.pumpWidget(steps(tour, <int>[1], scroll: true));
+      await tour.start('onboarding');
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+
+      // Activating it during build would ask Scrollable.ensureVisible to
+      // scroll to a target with no render object yet.
+      await tester.pumpWidget(steps(tour, <int>[1], scroll: true));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Step 1'), findsOneWidget);
+      final Size screen =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
+      final Rect target = tester.getRect(find.byType(HintTarget));
+      expect((Offset.zero & screen).contains(target.center), isTrue);
+    });
+
+    testWidgets('a step that never became active disposes cleanly',
+        (WidgetTester tester) async {
+      // Before Flutter 3.47 this threw: the lazily created controllers were
+      // first read in dispose, and creating a ticker on a deactivated element
+      // asserts. Newer frameworks tolerate it, so this only bites there.
+      final TourController tour = TourController();
+      addTearDown(tour.dispose);
+      await tester.pumpWidget(steps(tour, <int>[1, 2]));
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
 }
